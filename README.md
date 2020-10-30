@@ -1,13 +1,17 @@
-- [ ] Clear Baseline Program, can explain the details about all the steps, upload result
-- [ ] Add other machine learning methods (opt)
+- [x] Clear Baseline Program, can explain the details about all the steps, upload result
 - [ ] Add embedding mechanism
   - [ ] Word2Vec
   - [ ] GloVe
   - [ ] FastText
+- [ ] Add machine learning methods
+  - [ ] HMM
+  - [ ] CRF
+  - [ ] SVM
 - [ ] Add deep learning methods
   - [ ] basic RNN
   - [ ] BERT
 - [ ] Visualization
+- [ ] Upload
 - [ ] Design Pattern
 
 # AICUP - Deidentification of medical data
@@ -120,13 +124,13 @@ Example:
 
 首先將上面的 data 檔案透過 `Dataset()` 分成訓練集 (training set) 和測試集 (test set) 得到以下幾個物件:
 
-| Object                     | Format            | Desc                                                          |
-| -------------------------- | ----------------- | ------------------------------------------------------------- |
-| data_list                  | list(list(tuple)) | 將每個 content 的 data 抓出來，每個 tuple 是每個字的 CRF 資料 |
-| train_data_list            | list(list(tuple)) | 從 data_list 拆出的 training set                              |
-| test_data_list             | list(list(tuple)) | 從 data_list 拆出的 testing set                               |
-| train_data_article_id_list | list()            | training set 裡面的對應 content 編號                          |
-| test_data_article_id_list  | list()            | testing set 裡面的對應 content 編號                           |
+| Object                     | Format                                     | Desc                                                          |
+| -------------------------- | ------------------------------------------ | ------------------------------------------------------------- |
+| data_list                  | (content, sentence, tuple(word, CRF-type)) | 將每個 content 的 data 抓出來，每個 tuple 是每個字的 CRF 資料 |
+| train_data_list            | (content, sentence, tuple(word, CRF-type)) | 從 data_list 拆出的 training set                              |
+| test_data_list             | (content, sentence, tuple(word, CRF-type)) | 從 data_list 拆出的 testing set                               |
+| train_data_article_id_list | (content_id)                               | training set 裡面的對應 content 編號                          |
+| test_data_article_id_list  | (content_id)                               | testing set 裡面的對應 content 編號                           |
 
 以下是 `data_list` 的資料格式:
 
@@ -159,7 +163,7 @@ trainembed_list = Word2Vector(traindata_list, word_vecs)
 ]]
 ```
 
-最後就是分裝 train 和 test 的 data-label pair: 
+最後就是分裝 train 和 test 的 data-label pair:
 
 * `Feature()` 會將每個 512 維度的文字 embedding 轉為字典表示
 * `Preprocess()` 將每個 data_list 的 label 提取出來變成 list
