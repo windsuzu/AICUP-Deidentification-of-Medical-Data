@@ -10,24 +10,29 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm, trange
 
-train_file_path = '../dataset/train_1_update.txt'
+train_file_path = '../data/train_0.txt'
 test_file_path = '../dataset/development_1.txt'
 
 
 # %% function block
 def loadInputFile(path):
-    trainingset = list()  # store trainingset [content,content,...]
+    # store trainingset [content,content,...]
+    trainingset = list()
     # store position [article_id, start_pos, end_pos, entity_text, entity_type, ...]
-    position = list()
-    mentions = dict()  # store mentions[mention] = Type
+    position = list()    
+    # store mentions [entity_text] = entity_type                       
+    mentions = dict()
+
     with open(path, 'r', encoding='utf8') as f:
         file_text = f.read().encode('utf-8').decode('utf-8-sig')
     datas = file_text.split('\n\n--------------------\n\n')[:-1]
+
     for data in datas:
         data = data.split('\n')
         content = data[0]
         trainingset.append(content)
         annotations = data[1:]
+
         for annot in annotations[1:]:
             # annot = article_id, start_pos, end_pos, entity_text, entity_type
             annot = annot.split('\t')
@@ -36,71 +41,120 @@ def loadInputFile(path):
 
     return trainingset, position, mentions
 
+def loadTestFile(path):
+    testset = list()  # store testset [content,content,...]
+    with open(path, 'r', encoding='utf8') as f:
+        file_text = f.read().encode('utf-8').decode('utf-8-sig')
+        datas = file_text.split('\n\n--------------------\n\n')[:-1]
+        for data in datas:
+            data = data.split('\n')
+            testset.append(data[1])
 
-def CRFFormatData(dataset, path, position=0):
+    return testset
+
+# def RemoveBlankSpace(data):
+#     while '' or ' ' in data:
+#         if '' in data:
+#             data.remove('')
+#         else:
+#             data.remove(' ')
+#     return data
+
+def GenerateFormatData(dataset, path, position=0):
+    
     if (os.path.isfile(path)):
-        os.remove(path)
-    outputfile = open(path, 'a', encoding='utf-8')
+        print("Have been generated")
+        return
 
-    if not position:
+    outputfile = open(path, 'w', encoding= 'utf-8')
+    state = "train" if position else "test"
+
+    if state == "test":
         for article_id in range(len(dataset)):
-            testset_split = list(dataset[article_id])
-            while '' or ' ' in testset_split:
-                if '' in testset_split:
-                    testset_split.remove('')
-                else:
-                    testset_split.remove(' ')
+#             testset_split = list(dataset[article_id])
+#             clear_trainingset = RemoveBlankSpace(testset_split)
+            
             content = "\n".join([word for word in dataset[article_id]])
             outputfile.write(content)
             outputfile.write("\n\n")
 
             if article_id % 10 == 0:
                 print('Total complete articles:', article_id)
-        outputfile.close()
-        return
+    else:
+        count = 0  # annotation counts in each content
+        tagged = list()
+        for article_id in range(len(dataset)):
+    #         trainingset_split = list(dataset[article_id])
+    #         clear_trainingset = RemoveBlankSpace(trainingset_split)           ### 根本沒用到，後面還做了一次= =
 
-    # output file lines
-    count = 0  # annotation counts in each content
-    tagged = list()
-    for article_id in range(len(dataset)):
-        testset_split = list(dataset[article_id])
-        while '' or ' ' in testset_split:
-            if '' in testset_split:
-                testset_split.remove('')
-            else:
-                testset_split.remove(' ')
-        start_tmp = 0
-        for position_idx in range(0, len(position), 5):
-            if int(position[position_idx]) == article_id:
-                count += 1
-                if count == 1:
-                    start_pos = int(position[position_idx + 1])
-                    end_pos = int(position[position_idx + 2])
-                    entity_type = position[position_idx + 4]
-                    if start_pos == 0:
-                        token = list(dataset[article_id][start_pos:end_pos])
-                        whole_token = dataset[article_id][start_pos:end_pos]
-                        for token_idx in range(len(token)):
-                            if len(token[token_idx].replace(' ', '')) == 0:
-                                continue
-                            # BIO states
-                            if token_idx == 0:
-                                label = 'B-' + entity_type
-                            else:
-                                label = 'I-' + entity_type
+            start_tmp = 0
+            for position_idx in range(0, len(position), 5):                     ### 這是三小啦？？
+                if int(position[position_idx]) == article_id:                   ### 做了相當多不必要的回圈 可以改成while
+                    count += 1
+                    if count == 1:                                              ### 如果不是第1個，前面要補0
+                        start_pos = int(position[position_idx + 1])
+                        end_pos = int(position[position_idx + 2])
+                        entity_type = position[position_idx + 4]
+                        if start_pos == 0:
+                            token = list(dataset[article_id][start_pos:end_pos])
+                            whole_token = dataset[article_id][start_pos:end_pos]
+                            for token_idx in range(len(token)):
+                                if len(token[token_idx].replace(' ', '')) == 0: ### 很棒 他媽都沒有空白格
+                                    continue
+                                # BIO states
+                                if token_idx == 0:
+                                    label = 'B-' + entity_type
+                                else:
+                                    label = 'I-' + entity_type
 
-                            output_str = token[token_idx] + ' ' + label + '\n'
-                            outputfile.write(output_str)
+                                output_str = token[token_idx] + ' ' + label + '\n'
+                                outputfile.write(output_str)
 
+                        else:
+                            token = list(dataset[article_id][0:start_pos])
+                            whole_token = dataset[article_id][0:start_pos]
+                            for token_idx in range(len(token)):
+                                if len(token[token_idx].replace(' ', '')) == 0:
+                                    continue
+
+                                output_str = token[token_idx] + ' ' + 'O' + '\n'
+                                outputfile.write(output_str)
+
+                            token = list(dataset[article_id][start_pos:end_pos])
+                            whole_token = dataset[article_id][start_pos:end_pos]
+                            for token_idx in range(len(token)):
+                                if len(token[token_idx].replace(' ', '')) == 0:
+                                    continue
+                                # BIO states
+                                if token[0] == '':
+                                    if token_idx == 1:
+                                        label = 'B-' + entity_type
+                                    else:
+                                        label = 'I-' + entity_type
+                                else:
+                                    if token_idx == 0:
+                                        label = 'B-' + entity_type
+                                    else:
+                                        label = 'I-' + entity_type
+
+                                output_str = token[token_idx] + ' ' + label + '\n'
+                                outputfile.write(output_str)
+
+                        start_tmp = end_pos
                     else:
-                        token = list(dataset[article_id][0:start_pos])
-                        whole_token = dataset[article_id][0:start_pos]
-                        for token_idx in range(len(token)):
-                            if len(token[token_idx].replace(' ', '')) == 0:
-                                continue
-
-                            output_str = token[token_idx] + ' ' + 'O' + '\n'
-                            outputfile.write(output_str)
+                        start_pos = int(position[position_idx + 1])
+                        end_pos = int(position[position_idx + 2])
+                        entity_type = position[position_idx + 4]
+                        if start_pos < start_tmp:
+                            continue
+                        else:
+                            token = list(dataset[article_id][start_tmp:start_pos])
+                            whole_token = dataset[article_id][start_tmp:start_pos]
+                            for token_idx in range(len(token)):
+                                if len(token[token_idx].replace(' ', '')) == 0:
+                                    continue
+                                output_str = token[token_idx] + ' ' + 'O' + '\n'
+                                outputfile.write(output_str)
 
                         token = list(dataset[article_id][start_pos:end_pos])
                         whole_token = dataset[article_id][start_pos:end_pos]
@@ -121,76 +175,28 @@ def CRFFormatData(dataset, path, position=0):
 
                             output_str = token[token_idx] + ' ' + label + '\n'
                             outputfile.write(output_str)
+                        start_tmp = end_pos
 
-                    start_tmp = end_pos
-                else:
-                    start_pos = int(position[position_idx + 1])
-                    end_pos = int(position[position_idx + 2])
-                    entity_type = position[position_idx + 4]
-                    if start_pos < start_tmp:
-                        continue
-                    else:
-                        token = list(dataset[article_id][start_tmp:start_pos])
-                        whole_token = dataset[article_id][start_tmp:start_pos]
-                        for token_idx in range(len(token)):
-                            if len(token[token_idx].replace(' ', '')) == 0:
-                                continue
-                            output_str = token[token_idx] + ' ' + 'O' + '\n'
-                            outputfile.write(output_str)
+            token = list(dataset[article_id][start_tmp:])
+            whole_token = dataset[article_id][start_tmp:]
+            for token_idx in range(len(token)):
+                if len(token[token_idx].replace(' ', '')) == 0:
+                    continue
 
-                    token = list(dataset[article_id][start_pos:end_pos])
-                    whole_token = dataset[article_id][start_pos:end_pos]
-                    for token_idx in range(len(token)):
-                        if len(token[token_idx].replace(' ', '')) == 0:
-                            continue
-                        # BIO states
-                        if token[0] == '':
-                            if token_idx == 1:
-                                label = 'B-' + entity_type
-                            else:
-                                label = 'I-' + entity_type
-                        else:
-                            if token_idx == 0:
-                                label = 'B-' + entity_type
-                            else:
-                                label = 'I-' + entity_type
+                output_str = token[token_idx] + ' ' + 'O' + '\n'
+                outputfile.write(output_str)
 
-                        output_str = token[token_idx] + ' ' + label + '\n'
-                        outputfile.write(output_str)
-                    start_tmp = end_pos
+            count = 0
 
-        token = list(dataset[article_id][start_tmp:])
-        whole_token = dataset[article_id][start_tmp:]
-        for token_idx in range(len(token)):
-            if len(token[token_idx].replace(' ', '')) == 0:
-                continue
-
-            output_str = token[token_idx] + ' ' + 'O' + '\n'
+            output_str = '\n'
             outputfile.write(output_str)
+            ID = dataset[article_id]
 
-        count = 0
-
-        output_str = '\n'
-        outputfile.write(output_str)
-        ID = dataset[article_id]
-
-        if article_id % 10 == 0:
-            print('Total complete articles:', article_id)
+            if article_id % 10 == 0:
+                print('Total complete articles:', article_id)
 
     # close output file
     outputfile.close()
-
-
-def loadTestFile(path):
-    testset = list()  # store testset [content,content,...]
-    with open(path, 'r', encoding='utf8') as f:
-        file_text = f.read().encode('utf-8').decode('utf-8-sig')
-        datas = file_text.split('\n\n--------------------\n\n')[:-1]
-        for data in datas:
-            data = data.split('\n')
-            testset.append(data[1])
-
-    return testset
 
 
 # %% CRF Model
@@ -333,10 +339,10 @@ trainingset, position, mentions = loadInputFile(train_file_path)
 testset = loadTestFile(test_file_path)
 
 train_data_path = '../dataset/crf_data/train.data'
-CRFFormatData(trainingset, train_data_path, position)
+GenerateFormatData(trainingset, train_data_path, position)
 
 test_data_path = '../dataset/crf_data/test.data'
-CRFFormatData(testset, test_data_path)
+GenerateFormatData(testset, test_data_path)
 
 # %% load pretrained word vectors
 # get a dict of tokens (key) and their pretrained word vectors (value)
