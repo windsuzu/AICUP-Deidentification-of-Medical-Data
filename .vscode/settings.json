@@ -1,0 +1,8 @@
+{
+    "python.analysis.extraPaths": [
+        "D:/PROJECTS/Python/Deidentification-of-medical-data/program"
+    ],
+    "python.autoComplete.extraPaths": [
+        "D:/PROJECTS/Python/Deidentification-of-medical-data/program"
+    ]
+}
