@@ -5,6 +5,9 @@ import numpy as np
 import tensorflow as tf
 from pathlib import Path
 
+# TODO: try to reset the train dataset (dataset_size, article_split_size, 128)
+# TODO: try to reset the test dataset (dataset_size, article_split_size, 128)
+
 
 def getTrainData(root_datapath):
 
@@ -84,7 +87,7 @@ def encode_tags(tags, encodings):
     )
 
 
-#%%
+# %%
 train_texts, train_tags = getTrainData("dataset/crf_data/train.data")
 test_texts = getTestData("dataset/crf_data/test.data")
 
@@ -93,7 +96,7 @@ tag2id = {tag: id for id, tag in enumerate(unique_tags)}
 id2tag = {id: tag for tag, id in tag2id.items()}
 
 
-#%%
+# %%
 from sklearn.model_selection import train_test_split
 
 train_texts, val_texts, train_tags, val_tags = train_test_split(
@@ -102,10 +105,13 @@ train_texts, val_texts, train_tags, val_tags = train_test_split(
 
 
 # %%
-from transformers import AutoTokenizer, AutoModelForTokenClassification
+from transformers import BertTokenizer, TFBertForTokenClassification
 
-tokenizer = AutoTokenizer.from_pretrained("ckiplab/bert-base-chinese-ner")
-model = AutoModelForTokenClassification.from_pretrained("ckiplab/bert-base-chinese-ner")
+tokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
+model = TFBertForTokenClassification.from_pretrained(
+    "bert-base-chinese", num_labels=len(unique_tags)
+)
+
 
 # %%
 train_encodings = tokenizer(
@@ -118,19 +124,56 @@ val_encodings = tokenizer(
 train_labels = encode_tags(train_tags, train_encodings)
 val_labels = encode_tags(val_tags, val_encodings)
 
-#%%
+
+# %%
 train_dataset = tf.data.Dataset.from_tensor_slices(
     (dict(train_encodings), train_labels)
 )
-
 val_dataset = tf.data.Dataset.from_tensor_slices((dict(val_encodings), val_labels))
 
 
 # %%
-# TODO: checkpoint training
+optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+model.compile(optimizer=optimizer, loss=model.compute_loss, metrics=["accuracy"])
 
-# TODO: graphing training
+checkpoint = tf.keras.callbacks.ModelCheckpoint(
+    "../checkpoints/crf_transformers/",
+    save_best_only=True,
+    moniter="val_accuracy",
+    mode="max",
+)
 
-# TODO: predicting
 
+# %%
+import matplotlib.pyplot as plt
+
+history = model.fit(
+    train_dataset.shuffle(1000).batch(2),
+    epochs=10,
+    batch_size=2,
+    validation_data=val_dataset.batch(2),
+    callbacks=[checkpoint],
+)
+
+plt.plot(history.history["accuracy"])
+plt.plot(history.history["val_accuracy"])
+plt.title("Model accuracy")
+plt.ylabel("Accuracy")
+plt.xlabel("Epoch")
+plt.legend(["Train", "Test"], loc="upper left")
+plt.show()
+
+
+# %%
 # TODO: uploading
+
+# %%
+test = tokenizer.encode("小美是誰")
+tokens = tokenizer.decode(test).split(" ")
+
+prediction = model.predict(test)
+predict = tf.argmax(prediction.logits, axis=2).numpy()
+
+[(token, id2tag[pred[0]]) for token, pred in zip(tokens, predict)]
+
+# %%

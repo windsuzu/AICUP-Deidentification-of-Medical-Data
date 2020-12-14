@@ -163,7 +163,7 @@ trainembed_list = Word2Vector(traindata_list, word_vecs)
 ]]
 ```
 
-最後就是分裝 train 和 test 的 data-label pair:
+最後就是分裝 train 和 test 的 data-label pair:
 
 * `Feature()` 會將每個 512 維度的文字 embedding 轉為字典表示
 * `Preprocess()` 將每個 data_list 的 label 提取出來變成 list
