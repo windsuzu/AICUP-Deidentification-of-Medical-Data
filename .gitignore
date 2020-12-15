@@ -1,4 +1,6 @@
-.ipynb_checkpoints
+.ipynb_checkpoints/
+.virtual_documents/
 __pycache__/
+checkpoints/
 
 pretrained/cna.cbow.cwe_p.tar_g.512d.0.txt
