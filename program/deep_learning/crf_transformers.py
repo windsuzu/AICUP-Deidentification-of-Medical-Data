@@ -109,34 +109,39 @@ test_texts, test_mapping = getTestData("dataset/crf_data/test.data")
 unique_tags = set(tag for tags in train_tags for tag in tags)
 tag2id = {tag: id for id, tag in enumerate(unique_tags)}
 id2tag = {id: tag for tag, id in tag2id.items()}
-
+num_labels = len(unique_tags)
 
 # %%
 from sklearn.model_selection import train_test_split
+from transformers import AutoTokenizer
 
 train_texts, val_texts, train_tags, val_tags = train_test_split(
     train_texts, train_tags, test_size=0.1
 )
 
-
-# %%
-from transformers import BertTokenizer, TFBertForTokenClassification
-
-tokenizer = BertTokenizer.from_pretrained("bert-base-chinese")
-model = TFBertForTokenClassification.from_pretrained(
-    "bert-base-chinese", num_labels=len(unique_tags)
-)
-
+tokenizer = AutoTokenizer.from_pretrained("ckiplab/bert-base-chinese-ner")
 
 # %%
 train_encodings = tokenizer(
-    train_texts, is_split_into_words=True, padding=True, truncation=True
+    train_texts,
+    is_split_into_words=True,
+    padding=True,
+    truncation=True,
+    return_token_type_ids=False,
 )
 val_encodings = tokenizer(
-    val_texts, is_split_into_words=True, padding=True, truncation=True
+    val_texts,
+    is_split_into_words=True,
+    padding=True,
+    truncation=True,
+    return_token_type_ids=False,
 )
 test_encodings = tokenizer(
-    test_texts, is_split_into_words=True, padding=True, truncation=True
+    test_texts,
+    is_split_into_words=True,
+    padding=True,
+    truncation=True,
+    return_token_type_ids=False,
 )
 
 train_labels = encode_tags(train_tags)
@@ -153,6 +158,7 @@ val_labels = encode_tags(val_tags)
 # [PAD] (0, 0, -1)
 # ...
 
+
 # %%
 train_dataset = tf.data.Dataset.from_tensor_slices(
     (dict(train_encodings), train_labels)
@@ -161,14 +167,51 @@ val_dataset = tf.data.Dataset.from_tensor_slices((dict(val_encodings), val_label
 
 test_dataset = tf.data.Dataset.from_tensor_slices((dict(test_encodings)))
 
-
 # %%
-optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
-model.compile(
-    optimizer=optimizer,
-    loss=model.compute_loss,
-    metrics="acc",
+from transformers import TFAutoModelForTokenClassification
+
+model = TFAutoModelForTokenClassification.from_pretrained(
+    "ckiplab/bert-base-chinese-ner", from_pt=True, output_hidden_states=True
 )
+
+from tf2crf import CRF, ModelWithCRFLoss
+
+input_shape = MAX_SENTENCE_LENGTH + BERT_TOKENS_COUNT
+
+input_ids = tf.keras.Input(name="input_ids", shape=(input_shape,), dtype=tf.int32)
+attention_mask = tf.keras.Input(
+    name="attention_mask", shape=(input_shape,), dtype=tf.int32
+)
+
+transformer = model([input_ids, attention_mask])
+hidden_states = transformer[1]
+
+hidden_states_size = 1
+hiddes_states_ind = list(range(-hidden_states_size, 0, 1))
+
+selected_hiddes_states = tf.keras.layers.concatenate(
+    tuple([hidden_states[i] for i in hiddes_states_ind])
+)
+
+# crf = CRF(num_labels, name="crf_layer")
+crf = CRF(dtype='float32')
+
+output = tf.keras.layers.Dense(num_labels, activation="relu")(selected_hiddes_states)
+output = crf(output)
+
+model = tf.keras.models.Model(inputs=[input_ids, attention_mask], outputs=output)
+model = ModelWithCRFLoss(model)
+# model.summary()
+
+
+#%%
+yp = None
+yt = None
+
+
+##%%
+optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
+model.compile(optimizer=optimizer)
 
 checkpoint = tf.keras.callbacks.ModelCheckpoint(
     "../checkpoints/crf_transformers/",
@@ -179,7 +222,7 @@ checkpoint = tf.keras.callbacks.ModelCheckpoint(
 )
 
 
-# %%
+##%%
 import matplotlib.pyplot as plt
 
 history = model.fit(
@@ -191,7 +234,7 @@ history = model.fit(
 )
 
 # %%
-
+tf.keras.models.save_model(model, "../checkpoints/crf_transformers/1")
 plt.plot(history.history["val_f1"])
 plt.title("Model f1")
 plt.ylabel("f1")
@@ -202,13 +245,15 @@ plt.show()
 
 # %%
 prediction = model.predict(test_dataset)[0]
-prediction = np.argmax(prediction, -1)
-batch_size = MAX_SENTENCE_LENGTH + BERT_TOKENS_COUNT
-prediction = prediction.reshape(-1, batch_size)
+# prediction = np.argmax(prediction, -1)
+# batch_size = MAX_SENTENCE_LENGTH + BERT_TOKENS_COUNT
+# prediction = prediction.reshape(-1, batch_size)
 
 
 # %%
-output_column = "article_id\tstart_position\tend_position\tentity_text\tentity_type\n"
+# output_format:
+# (article_id, start_position, end_position, entity_text, entity_type)
+
 output = []
 
 article_id = 0
@@ -243,14 +288,3 @@ for article in test_mapping:
                     )
                     entity_type = None
             pos_counter += 1
-
-#%%
-output
-#%%
-test = tokenizer.encode("醫師：所以你這個月，你是任務型嗎")
-tokens = tokenizer.decode(test).split(" ")
-
-prediction = model.predict(test)
-predict = tf.argmax(prediction.logits, axis=2).numpy()
-
-[(token, id2tag[pred[0]]) for token, pred in zip(tokens, predict)]
