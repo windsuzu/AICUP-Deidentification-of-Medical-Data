@@ -6,7 +6,7 @@ from tqdm import tqdm, trange
 from pathlib import Path
 
 sys.path.append(str(Path().resolve().parents[1]))
-from program.utils.crf_preprocessing import loadInputFile, loadTestFile, CRFFormatData
+from program.utils.crf_preprocessing import loadInputFile, loadTestFile, GenerateFormatData
 
 train_file_path = "../../dataset/train.txt"
 test_file_path = "../../dataset/development.txt"
