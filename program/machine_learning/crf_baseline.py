@@ -1,204 +1,171 @@
 # %% import block
 import sys
-import sklearn_crfsuite
 import numpy as np
 from tqdm import tqdm, trange
 from pathlib import Path
 
-sys.path.append(str(Path().resolve().parents[1]))
-from program.utils.crf_preprocessing import loadInputFile, loadTestFile, GenerateFormatData
+import sklearn_crfsuite
+from sklearn_crfsuite import scorers
+from sklearn_crfsuite import metrics
+from sklearn.model_selection import train_test_split
+from sklearn_crfsuite.metrics import flat_classification_report
 
+sys.path.append(str(Path().resolve().parents[1]))
+from program.utils.crf_preprocessing import loadInputFile, loadTestFile, GenerateCRFFormatData
+
+validate = True
 train_file_path = "../../dataset/train.txt"
 test_file_path = "../../dataset/development.txt"
+train_data_path = "../../dataset/crf_data/train.data"
+test_data_path = "../../dataset/crf_data/test.data"
+pretrained_word2vec_path = 'data/cna.cbow.cwe_p.tar_g.512d.0.txt'
+output_path = "../output/output.tsv"
 
 # %% CRF Model
-def CRF(x_train, y_train, x_test):
-    crf = sklearn_crfsuite.CRF(
-        algorithm="lbfgs",
-        c1=0.1,
-        c2=0.1,
-        max_iterations=100,
-        verbose=True,
-        all_possible_transitions=True,
-    )
-    crf.fit(x_train, y_train)
-    y_test_pred = crf.predict(x_test)
-    # y_val_pred_mar = crf.predict_marginals(x_val)
-
-    # labels = list(crf.classes_)
-    # labels.remove('O')
-
-    # val_f1score = metrics.flat_f1_score(y_val,
-    #                                 y_val_pred,
-    #                                 average='weighted',
-    #                                 labels=labels)
-    # sorted_labels = sorted(labels, key=lambda name:
-    #                        (name[1:], name[0]))  # group B and I results
-    # print(
-    #     flat_classification_report(y_val,
-    #                                y_val_pred,
-    #                                labels=sorted_labels,
-    #                                digits=3))
-
-    return y_test_pred
+model = sklearn_crfsuite.CRF(
+    algorithm="lbfgs",
+    c1=0.1,
+    c2=0.1,
+    max_iterations=100,
+    verbose=True,
+    all_possible_transitions=True,
+)
 
 
 # %% Data preprocess method
-def Dataset(data_path):
-    """
-    load `train.data` and separate into a list of labeled data of each text
-
-    return:
-        data_list:
-        a list of lists of tuples, storing tokens and labels (wrapped in tuple) of each text in `train.data`
-
-        traindata_list:
-        a list of lists, storing training data_list splitted from data_list
-
-        testdata_list:
-        a list of lists, storing testing data_list splitted from data_list
-    """
-    with open(data_path, "r", encoding="utf-8") as f:
-        data = f.readlines()  # .encode('utf-8').decode('utf-8-sig')
-    data_list, data_list_tmp = list(), list()
-    article_id_list = list()
-    idx = 0
+def CRFFormatToList(data_path):
+    
+    with open(data_path, 'r', encoding='utf-8') as format_data:
+        data = format_data.readlines()#.encode('utf-8').decode('utf-8-sig')
+    
+    state = "test" if len(data[0].strip('\n').split(' ')) == 1 else "train"
+    total_data_list, separate_data_list = list(), list()
     for row in data:
         data_tuple = tuple()
-        if row == "\n":
-            article_id_list.append(idx)
-            idx += 1
-            data_list.append(data_list_tmp)
-            data_list_tmp = []
+        if row == '\n':
+            total_data_list.append(separate_data_list)
+            separate_data_list = []
         else:
-            row = row.strip("\n").split(" ")
-            if len(row) == 1:
-                data_tuple = row[0]
+            if state == "test":
+                token = row.strip('\n').split(' ')
+                separate_data_list.append(token)
             else:
-                data_tuple = (row[0], row[1])
-            data_list_tmp.append(data_tuple)
-    if len(data_list_tmp) != 0:
-        data_list.append(data_list_tmp)
-
-    # here we random split data into training dataset and testing dataset
-    # but you should take `development data` or `test data` as testing data
-    # At that time, you could just delete this line,
-    # and generate data_list of `train data` and data_list of `development/test data` by this function
-
-    # traindata_list, testdata_list, traindata_article_id_list, testdata_article_id_list = train_test_split(data_list, article_id_list, test_size=0.05, random_state=42)
-    # return data_list, traindata_list, testdata_list, traindata_article_id_list, testdata_article_id_list
-
-    return data_list, article_id_list
+                token, label = row.strip('\n').split(' ')
+                token_label_pair = (token, label)
+                separate_data_list.append(token_label_pair)
+    
+    return total_data_list
 
 
-# look up word vectors
-# turn each word into its pretrained word vector
-# return a list of word vectors corresponding to each token in train.data
-def Word2Vector(data_list, embedding_dict):
-    embedding_list = list()
+def GetUntokenVector(word_vector_dim):
+    np.random.seed(42)
+    unk_vector = np.random.rand(word_vector_dim)
+    return unk_vector
+
+def ListToDict(vector):
+    vector_dict = dict()
+    for idx_vec in range(len(vector)):
+        vector_dict['dim_' + str(idx_vec+1)] = vector[idx_vec]
+    return vector_dict
+
+def Word2Vector(separate_data_list, embedded_dict, unk_vector):
+    separate_embedded_list = list()
+    for idx_tuple in range(len(separate_data_list)):
+        token = separate_data_list[idx_tuple][0]
+
+        if token in embedded_dict:
+            vector = embedded_dict[token]
+        else:
+            vector = unk_vector
+        vector = ListToDict(vector)
+        separate_embedded_list.append(vector)
+        
+    return separate_embedded_list
+
+def GetInputData(data_list, embedded_dict):
+    input_list = list()
 
     # No Match Word (unknown word) Vector in Embedding
-    unk_vector = np.random.rand(*(list(embedding_dict.values())[0].shape))
+    word_vector_dim = len(list(embedded_dict.values())[0])
+    unk_vector = GetUntokenVector(word_vector_dim)
 
-    for idx_list in trange(len(data_list)):
-        embedding_list_tmp = list()
-        for idx_tuple in range(len(data_list[idx_list])):
-            key = data_list[idx_list][idx_tuple][0]  # token
-
-            if key in embedding_dict:
-                value = embedding_dict[key]
-            else:
-                value = unk_vector
-            embedding_list_tmp.append(value)
-        embedding_list.append(embedding_list_tmp)
-    return embedding_list
-
-
-def Feature(embed_list):
-    """
-    # input features: pretrained word vectors of each token
-    # return a list of feature dicts, each feature dict corresponding to each token
-    """
-    feature_list = list()
-    for idx_list in trange(len(embed_list)):  # for every article
-        feature_list_tmp = list()
-        # for every word (512)
-        for idx_tuple in range(len(embed_list[idx_list])):
-            feature_dict = dict()
-            for idx_vec in range(len(embed_list[idx_list][idx_tuple])):
-                feature_dict["dim_" + str(idx_vec + 1)] = embed_list[idx_list][
-                    idx_tuple
-                ][idx_vec]
-            feature_list_tmp.append(feature_dict)
-        feature_list.append(feature_list_tmp)
-    return feature_list
-
-
-def Preprocess(data_list):
-    """
-    # get the labels of each tokens in train.data
-    # return a list of lists of labels
-    """
-    label_list = list()
     for idx_list in range(len(data_list)):
-        label_list_tmp = list()
+        separate_separate_list = Word2Vector(data_list[idx_list], embedded_dict, unk_vector)
+        input_list.append(separate_separate_list)
+
+    return input_list
+
+def GetLabelData(data_list):
+    total_label_list = list()
+    for idx_list in range(len(data_list)):
+        separate_label_list = list()
         for idx_tuple in range(len(data_list[idx_list])):
-            label_list_tmp.append(data_list[idx_list][idx_tuple][1])
-        label_list.append(label_list_tmp)
-    return label_list
+            separate_label_list.append(data_list[idx_list][idx_tuple][1])
+        total_label_list.append(separate_label_list)
+    return total_label_list
+
+def ModelEvaluation(model, ground_truth, predict):
+    labels = list(model.classes_)
+    labels.remove('O')
+    f1_score = metrics.flat_f1_score(ground_truth, predict, average='weighted', labels=labels)
+    sorted_labels = sorted(labels, key=lambda name: (name[1:], name[0])) # group B and I results
+    
+    print(flat_classification_report(ground_truth, predict, labels=sorted_labels, digits=3))
+    print("F1 score :", f1_score)
 
 
 # %%
 trainingset, position, mentions = loadInputFile(train_file_path)
-testset = loadTestFile(test_file_path)
+testingset = loadTestFile(test_file_path)
 
-train_data_path = "../../dataset/crf_data/train.data"
-CRFFormatData(trainingset, train_data_path, position)
-
-test_data_path = "../../dataset/crf_data/test.data"
-CRFFormatData(testset, test_data_path)
+GenerateCRFFormatData(trainingset, train_data_path, position)
+GenerateCRFFormatData(testingset, test_data_path)
 
 # %% load pretrained word vectors
 # get a dict of tokens (key) and their pretrained word vectors (value)
 # pretrained word2vec CBOW word vector:
 # https://fgc.stpi.narl.org.tw/activity/videoDetail/4b1141305ddf5522015de5479f4701b1
-dim = 0
-word_vecs = {}
-# open pretrained word vector file
-with open("../../pretrained/cna.cbow.cwe_p.tar_g.512d.0.txt", encoding="utf8") as f:
-    for line in tqdm(f):
+word_vecs= {}
+with open(pretrained_word2vec_path, 'r', encoding='utf-8') as word2vec:
+    for line in word2vec:
         tokens = line.strip().split()
 
+        # There are two integers in the first line: vocabulary_size, word_vector_dim
         if len(tokens) == 2:
-            dim = int(tokens[1])
             continue
-
+    
         word = tokens[0]
-        vec = np.array([float(t) for t in tokens[1:]])
+        vec = np.array([float(dim) for dim in tokens[1:]])
         word_vecs[word] = vec
 
 print("vocabulary_size: ", len(word_vecs))
 print("word_vector_dim: ", vec.shape)
 
 # %%
-train_data_list, train_data_article_id_list = Dataset(train_data_path)
-test_data_list, test_data_article_id_list = Dataset(test_data_path)
+train_data_list = CRFFormatToList(train_data_path)
+test_data_list = CRFFormatToList(test_data_path)
 
 # %%
-# Load Word Embedding
-train_embed_list = Word2Vector(train_data_list, word_vecs)
-test_embed_list = Word2Vector(test_data_list, word_vecs)
+if validate:
+    print("Processing validate data")
+    train_data_list, val_data_list = train_test_split(train_data_list, test_size=0.25, random_state=42)
+    x_val = GetInputData(val_data_list, word_vecs)
+    y_val = GetLabelData(val_data_list)
 
-# CRF - Train Data (Augmentation Data)
-x_train = Feature(train_embed_list)
-y_train = Preprocess(train_data_list)
+print("Processing training data")
+x_train = GetInputData(train_data_list, word_vecs)
+y_train = GetLabelData(train_data_list)
 
-# CRF - Test Data (Golden Standard)
-x_test = Feature(test_embed_list)
-# y_val = Preprocess(val_data_list)
-
+print("Processing testing data")
+x_test = GetInputData(test_data_list, word_vecs)
 # %% Training & Predicting
-y_pred = CRF(x_train, y_train, x_test)
+model.fit(x_train, y_train)
+y_pred = model.predict(x_test)
+
+# %%
+if validate:
+    y_pred_val = model.predict(x_val)
+    ModelEvaluation(model, y_val, y_pred_val)
 
 # %% Output in upload format
 
@@ -230,7 +197,7 @@ for test_id in range(len(y_pred)):  # for every content
                 ]
             )
             line = (
-                str(test_data_article_id_list[test_id])
+                str(test_id)
                 + "\t"
                 + str(start_pos)
                 + "\t"
@@ -243,7 +210,7 @@ for test_id in range(len(y_pred)):  # for every content
             output += line + "\n"
         pos += 1
 
-output_path = "../output/output.tsv"
+
 with open(output_path, "w", encoding="utf-8") as f:
     f.write(output)
 
