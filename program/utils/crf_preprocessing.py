@@ -51,7 +51,7 @@ def CheckUselessCharacter(article_id, content):
     if '' or ' ' in content_split:
         raise DiscoveryEmptyCharacter("'' or ' ' in {}th content".format(article_id))
 
-def GenerateLabel(token, token_idx, entity_type):
+def GenerateLabelString(token, token_idx, entity_type):
     # BIO states
     if token_idx == 0:
         label = 'B-' + entity_type
@@ -66,7 +66,7 @@ def FillUpZero(token_list, outputfile):
         output_str = token_list[token_idx] + ' ' + 'O' + '\n'
         outputfile.write(output_str)
 
-def GenerateFormatData(content, path, position=0):
+def GenerateCRFFormatData(content, path, position=0):
     
     if (os.path.isfile(path)):
         print("Have been generated")
@@ -104,7 +104,7 @@ def GenerateFormatData(content, path, position=0):
                     FillUpZero(front_token, outputfile)
                 
                 for token_idx in range(len(label_token)):
-                    output_str = GenerateLabel(label_token[token_idx], token_idx, label_entity_type)
+                    output_str = GenerateLabelString(label_token[token_idx], token_idx, label_entity_type)
                     outputfile.write(output_str)
                 start_tmp = label_end_pos
 
