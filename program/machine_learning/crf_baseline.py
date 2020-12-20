@@ -1,8 +1,6 @@
 # %% import block
-import sys
+import os
 import numpy as np
-from tqdm import tqdm, trange
-from pathlib import Path
 
 import sklearn_crfsuite
 from sklearn_crfsuite import scorers
@@ -10,16 +8,27 @@ from sklearn_crfsuite import metrics
 from sklearn.model_selection import train_test_split
 from sklearn_crfsuite.metrics import flat_classification_report
 
+from pathlib import Path
 sys.path.append(str(Path().resolve().parents[1]))
-from program.utils.crf_preprocessing import loadInputFile, loadTestFile, GenerateCRFFormatData
 
-validate = True
-train_file_path = "../../dataset/train.txt"
-test_file_path = "../../dataset/development.txt"
-train_data_path = "../../dataset/crf_data/train.data"
-test_data_path = "../../dataset/crf_data/test.data"
+from program.utils.load_data import loadInputFile, loadTestFile, generateCRFFormatData
+from program.utils.write_output_file import generateOutputFile
+
+validate = False
+test_data_delete_blank = True
+train_file_path = "data/train_0_half.txt"
+test_file_path = "data/test_half.txt"
+train_data_path = "data/trainFormat.data"
+test_data_path = "data/testFormat.data"
 pretrained_word2vec_path = 'data/cna.cbow.cwe_p.tar_g.512d.0.txt'
-output_path = "../output/output.tsv"
+output_path = "output/output.tsv"
+
+# %%
+trainingset, position, mentions = loadInputFile(train_file_path)
+testingset = loadTestFile(test_file_path)
+
+generateCRFFormatData(trainingset, train_data_path, position)
+generateCRFFormatData(testingset, test_data_path)
 
 # %% CRF Model
 model = sklearn_crfsuite.CRF(
@@ -31,8 +40,28 @@ model = sklearn_crfsuite.CRF(
     all_possible_transitions=True,
 )
 
+# %% load pretrained word vectors
+# get a dict of tokens (key) and their pretrained word vectors (value)
+# pretrained word2vec CBOW word vector:
+# https://fgc.stpi.narl.org.tw/activity/videoDetail/4b1141305ddf5522015de5479f4701b1
+word_vecs= {}
+with open(pretrained_word2vec_path, 'r', encoding='utf-8') as word2vec:
+    for line in word2vec:
+        tokens = line.strip().split()
 
-# %% Data preprocess method
+        # There are two integers in the first line: vocabulary_size, word_vector_dim
+        if len(tokens) == 2:
+            continue
+    
+        word = tokens[0]
+        vec = np.array([float(dim) for dim in tokens[1:]])
+        word_vecs[word] = vec
+
+print("vocabulary_size: ", len(word_vecs))
+print("word_vector_dim: ", vec.shape)
+
+
+# %% Fit required data sturture of crf model
 def CRFFormatToList(data_path):
     
     with open(data_path, 'r', encoding='utf-8') as format_data:
@@ -55,7 +84,6 @@ def CRFFormatToList(data_path):
                 separate_data_list.append(token_label_pair)
     
     return total_data_list
-
 
 def GetUntokenVector(word_vector_dim):
     np.random.seed(42)
@@ -104,43 +132,6 @@ def GetLabelData(data_list):
         total_label_list.append(separate_label_list)
     return total_label_list
 
-def ModelEvaluation(model, ground_truth, predict):
-    labels = list(model.classes_)
-    labels.remove('O')
-    f1_score = metrics.flat_f1_score(ground_truth, predict, average='weighted', labels=labels)
-    sorted_labels = sorted(labels, key=lambda name: (name[1:], name[0])) # group B and I results
-    
-    print(flat_classification_report(ground_truth, predict, labels=sorted_labels, digits=3))
-    print("F1 score :", f1_score)
-
-
-# %%
-trainingset, position, mentions = loadInputFile(train_file_path)
-testingset = loadTestFile(test_file_path)
-
-GenerateCRFFormatData(trainingset, train_data_path, position)
-GenerateCRFFormatData(testingset, test_data_path)
-
-# %% load pretrained word vectors
-# get a dict of tokens (key) and their pretrained word vectors (value)
-# pretrained word2vec CBOW word vector:
-# https://fgc.stpi.narl.org.tw/activity/videoDetail/4b1141305ddf5522015de5479f4701b1
-word_vecs= {}
-with open(pretrained_word2vec_path, 'r', encoding='utf-8') as word2vec:
-    for line in word2vec:
-        tokens = line.strip().split()
-
-        # There are two integers in the first line: vocabulary_size, word_vector_dim
-        if len(tokens) == 2:
-            continue
-    
-        word = tokens[0]
-        vec = np.array([float(dim) for dim in tokens[1:]])
-        word_vecs[word] = vec
-
-print("vocabulary_size: ", len(word_vecs))
-print("word_vector_dim: ", vec.shape)
-
 # %%
 train_data_list = CRFFormatToList(train_data_path)
 test_data_list = CRFFormatToList(test_data_path)
@@ -158,72 +149,24 @@ y_train = GetLabelData(train_data_list)
 
 print("Processing testing data")
 x_test = GetInputData(test_data_list, word_vecs)
-# %% Training & Predicting
+
+print("Training...")
 model.fit(x_train, y_train)
 y_pred = model.predict(x_test)
 
 # %%
+def ModelEvaluation(model, ground_truth, predict):
+    labels = list(model.classes_)
+    labels.remove('O')
+    f1_score = metrics.flat_f1_score(ground_truth, predict, average='weighted', labels=labels)
+    sorted_labels = sorted(labels, key=lambda name: (name[1:], name[0])) # group B and I results
+    
+    print(flat_classification_report(ground_truth, predict, labels=sorted_labels, digits=3))
+    print("F1 score :", f1_score)
+
 if validate:
     y_pred_val = model.predict(x_val)
     ModelEvaluation(model, y_val, y_pred_val)
 
 # %% Output in upload format
-
-output = "article_id\tstart_position\tend_position\tentity_text\tentity_type\n"
-for test_id in range(len(y_pred)):  # for every content
-    pos = 0
-    start_pos = None
-    end_pos = None
-    entity_text = None
-    entity_type = None
-    # for every predict token in the content
-    for pred_id in range(len(y_pred[test_id])):
-        if y_pred[test_id][pred_id][0] == "B":
-            start_pos = pos
-            entity_type = y_pred[test_id][pred_id][2:]
-        elif (
-            start_pos is not None
-            and y_pred[test_id][pred_id][0] == "I"
-            and (
-                pred_id + 1 == len(y_pred[test_id])
-                or y_pred[test_id][pred_id + 1][0] == "O"
-            )
-        ):
-            end_pos = pos
-            entity_text = "".join(
-                [
-                    test_data_list[test_id][position][0]
-                    for position in range(start_pos, end_pos + 1)
-                ]
-            )
-            line = (
-                str(test_id)
-                + "\t"
-                + str(start_pos)
-                + "\t"
-                + str(end_pos + 1)
-                + "\t"
-                + entity_text
-                + "\t"
-                + entity_type
-            )
-            output += line + "\n"
-        pos += 1
-
-
-with open(output_path, "w", encoding="utf-8") as f:
-    f.write(output)
-
-#%%
-
-# You may try python-crfsuite to train an neural network for NER tagging optimized by gradient descent back propagation
-
-# You may try CRF++ tool for NER tagging by CRF model
-
-# You may try other traditional chinese word embedding (ex. fasttext, bert, ...) for input features
-
-# You may try add other features for NER model, ex. POS-tag, word_length, word_position, ...
-
-# You should upload the prediction output on development data or test data provided later to the # competition system.
-
-# Note don't upload prediction output on the splitted testing dataset like this # baseline example.
+GenerateOutputFile(y_pred, test_data_list, testingset, output_path, test_data_delete_blank)
