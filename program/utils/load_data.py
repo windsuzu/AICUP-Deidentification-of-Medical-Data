@@ -1,6 +1,5 @@
 import os
-
-
+ 
 def loadInputFile(path):
     # store trainingset [content,content,...]
     trainingset = list()
@@ -42,16 +41,13 @@ def loadTestFile(path):
 
     return testset
 
+def blankSpaceExist(token):
+    if len(token.replace(' ','')) == 0:
+        return True
+    else:
+        return False
 
-class DiscoveryEmptyCharacter(BaseException):
-    pass
-
-def CheckUselessCharacter(article_id, content):
-    content_split = set(content)
-    if '' or ' ' in content_split:
-        raise DiscoveryEmptyCharacter("'' or ' ' in {}th content".format(article_id))
-
-def GenerateLabelString(token, token_idx, entity_type):
+def generateLabelString(token, token_idx, entity_type):
     # BIO states
     if token_idx == 0:
         label = 'B-' + entity_type
@@ -61,12 +57,12 @@ def GenerateLabelString(token, token_idx, entity_type):
     label_str = token + ' ' + label + '\n'
     return label_str
 
-def FillUpZero(token_list, outputfile):
+def fillUpZero(token_list, outputfile):
     for token_idx in range(len(token_list)):
         output_str = token_list[token_idx] + ' ' + 'O' + '\n'
         outputfile.write(output_str)
 
-def GenerateCRFFormatData(content, path, position=0):
+def generateCRFFormatData(content, path, position=0, delete_blank=False):
     
     if (os.path.isfile(path)):
         print("Have been generated")
@@ -77,9 +73,11 @@ def GenerateCRFFormatData(content, path, position=0):
     
     if state == "test":
         for article_id in range(len(content)):
-            CheckUselessCharacter(article_id, content[article_id])
-
-            content_split = "\n".join([word for word in content[article_id]])
+            if delete_blank:
+                clear_content = content[article_id].replace(" ","")
+                content_split = "\n".join([word for word in clear_content])
+            else:
+                content_split = "\n".join([word for word in content[article_id]])
             outputfile.write(content_split)
             outputfile.write("\n\n")
 
@@ -87,8 +85,6 @@ def GenerateCRFFormatData(content, path, position=0):
                 print('Total complete articles:', article_id)
     else:
         for article_id in range(len(content)):
-            CheckUselessCharacter(article_id, content[article_id])
-            
             start_tmp = 0
             separate_position = position[article_id]
             
@@ -100,16 +96,19 @@ def GenerateCRFFormatData(content, path, position=0):
 
                 begin_idx = 0 if position_idx == 0 else start_tmp
                 if label_start_pos != 0:
-                    front_token = list(content[article_id][begin_idx:label_start_pos])
-                    FillUpZero(front_token, outputfile)
+                    front_token = list(content[article_id][begin_idx:label_start_pos].replace(" ",""))
+                    fillUpZero(front_token, outputfile)
                 
                 for token_idx in range(len(label_token)):
-                    output_str = GenerateLabelString(label_token[token_idx], token_idx, label_entity_type)
+                    if blankSpaceExist(label_token[token_idx]):
+                        continue
+                        
+                    output_str = generateLabelString(label_token[token_idx], token_idx, label_entity_type)
                     outputfile.write(output_str)
                 start_tmp = label_end_pos
 
-            remaining_token = list(content[article_id][start_tmp:])
-            FillUpZero(remaining_token, outputfile)
+            remaining_token = list(content[article_id][start_tmp:].replace(" ",""))
+            fillUpZero(remaining_token, outputfile)
 
             output_str = '\n'
             outputfile.write(output_str)
