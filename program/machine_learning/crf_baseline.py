@@ -8,36 +8,23 @@ from sklearn_crfsuite import scorers
 from sklearn_crfsuite import metrics
 from sklearn.model_selection import train_test_split
 from sklearn_crfsuite.metrics import flat_classification_report
-
 from pathlib import Path
 
 sys.path.append(str(Path().resolve().parents[1]))
-
-from program.utils.load_data import loadInputFile, loadTestFile, generateCRFFormatData
+from program.utils.load_data import loadTestFile
 from program.utils.write_output_file import generateOutputFile
 
 validate = False
 test_data_delete_blank = True
-# train_file_path = "data/train_0_half.txt"
-# test_file_path = "data/test_half.txt"
-train_file_path = "../../dataset/train.txt"
-test_file_path = "../../dataset/test.txt"
-
-# train_data_path = "data/trainFormat.data"
-# test_data_path = "data/testFormat.data"
-train_data_path = "../../dataset/crf_data/train.data"
-test_data_path = "../../dataset/crf_data/test.data"
-
 
 pretrained_word2vec_path = "data/cna.cbow.cwe_p.tar_g.512d.0.txt"
 output_path = "output/output.tsv"
 
-# %%
-trainingset, position, mentions = loadInputFile(train_file_path)
-testingset = loadTestFile(test_file_path)
+train_data_path = "../../dataset/crf_data/train.data"
+test_data_path = "../../dataset/crf_data/test.data"
+test_file_path = "../../dataset/test.txt"
 
-generateCRFFormatData(trainingset, train_data_path, position)
-generateCRFFormatData(testingset, test_data_path)
+testingset = loadTestFile(test_file_path)
 
 # %% CRF Model
 model = sklearn_crfsuite.CRF(
@@ -197,6 +184,6 @@ if validate:
     ModelEvaluation(model, y_val, y_pred_val)
 
 # %% Output in upload format
-GenerateOutputFile(
+generateOutputFile(
     y_pred, test_data_list, testingset, output_path, test_data_delete_blank
 )

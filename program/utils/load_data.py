@@ -118,3 +118,17 @@ def generateCRFFormatData(content, path, position=0, delete_blank=False):
     # close output file
 
     outputfile.close()
+
+
+if __name__ == "__main__":
+    train_file_path = "../../dataset/train.txt"
+    test_file_path = "../../dataset/test.txt"
+
+    train_data_path = "../../dataset/crf_data/train.data"
+    test_data_path = "../../dataset/crf_data/test.data"
+
+    trainingset, position, mentions = loadInputFile(train_file_path)
+    testingset = loadTestFile(test_file_path)
+
+    generateCRFFormatData(trainingset, train_data_path, position)
+    generateCRFFormatData(testingset, test_data_path)
