@@ -1,12 +1,19 @@
 #%%
-import tensorflow as tf
+import sys
+from pathlib import Path
+from tqdm import tqdm
 
-# physical_devices = tf.config.list_physical_devices('GPU')
-# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
-# print(physical_devices)
-#%%
+sys.path.append(str(Path().resolve().parents[1]))
+
+from program.utils.load_data import loadTestFile
+import numpy as np
+import pandas as pd
+import tensorflow as tf
 import tensorflow_addons as tf_ad
 import os
+
+physical_devices = tf.config.list_physical_devices("GPU")
+tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
 
 
 def build_vocab(corpus_file_list, vocab_file, tag_file):
@@ -134,8 +141,9 @@ def tokenize(filename, vocab2id, tag2id, maxlen):
     labels = []
     content = []
     label = []
+
     with open(filename, "r", encoding="utf-8") as fr:
-        for line in [elem for elem in fr.readlines()][:500000]:
+        for line in fr.readlines():
             try:
                 if line != "\n":
                     w, t = line.split()
@@ -150,8 +158,12 @@ def tokenize(filename, vocab2id, tag2id, maxlen):
             except Exception as e:
                 content = []
                 label = []
-    contents = tf.keras.preprocessing.sequence.pad_sequences(contents, padding="post", maxlen=maxlen)
-    labels = tf.keras.preprocessing.sequence.pad_sequences(labels, padding="post", maxlen=maxlen)
+    contents = tf.keras.preprocessing.sequence.pad_sequences(
+        contents, padding="post", maxlen=maxlen
+    )
+    labels = tf.keras.preprocessing.sequence.pad_sequences(
+        labels, padding="post", maxlen=maxlen
+    )
     return contents, labels
 
 
@@ -190,8 +202,8 @@ def format_result(chars, tags):
         tags: ['B-ORG', 'I-ORG', 'I-ORG', 'I-ORG', 'I-ORG', 'I-ORG', 'I-ORG', 'I-ORG', 'E-ORG', 'O', 'O', 'O', 'B-PER', 'I-PER', 'E-PER']
 
     Returns:
-        [{'begin': 1, 'end': 9, 'words': '国家发展计划委员会', 'type': 'ORG'},
-         {'begin': 13, 'end': 15, 'words': '王春正', 'type': 'PER'}]
+        [{'begin': 0, 'end': 9, 'words': '国家发展计划委员会', 'type': 'ORG'},
+         {'begin': 12, 'end': 15, 'words': '王春正', 'type': 'PER'}]
     """
 
     entities = []
@@ -210,7 +222,7 @@ def format_result(chars, tags):
         if entity[0][2].startswith("B-"):
             entities_result.append(
                 {
-                    "begin": entity[0][0] + 1,
+                    "begin": entity[0][0],
                     "end": entity[-1][0] + 1,
                     "words": "".join([char for _, char, _, _ in entity]),
                     "type": entity[0][2].split("-")[1],
@@ -273,9 +285,9 @@ if not (os.path.exists(vocab_file_path) and os.path.exists(tag_file_path)):
 
 BATCH_SIZE = 128
 HIIDEN_NUMS = 512
-EMBEDDING_SIZE = 300
+EMBEDDING_SIZE = 512
 LEARNING_RATE = 1e-3
-EPOCHS = 10
+EPOCHS = 20
 SENTENCE_MAX_LEN = 32
 checkpoint_file_path = "../checkpoints/crf_bilstm/"
 
@@ -292,7 +304,6 @@ train_dataset = tf.data.Dataset.from_tensor_slices((text_sequences, label_sequen
 train_dataset = train_dataset.shuffle(len(text_sequences)).batch(
     BATCH_SIZE, drop_remainder=True
 )
-
 
 
 model = NerModel(
@@ -361,41 +372,152 @@ for epoch in range(EPOCHS):
         step = step + 1
         loss, logits, text_lens = train_one_step(text_batch, labels_batch)
         if step % 20 == 0:
-            print('epoch %d, step %d, loss %.4f , accuracy %.4f' % (epoch, step, loss, accuracy))
             accuracy = get_acc_one_step(logits, text_lens, labels_batch)
+            print(
+                f"epoch {epoch}, step {step}, loss {loss:.4f} , accuracy {accuracy:.4f}"
+            )
 
             if accuracy > best_acc:
                 best_acc = accuracy
                 ckpt_manager.save()
+                print("model saved")
 
 # %%
-test_path = "../../dataset/crf_data/test_grained.data"
-
-# text_sequences ,label_sequences= tokenize(test_path, voc2id, tag2id)
-
 optimizer = tf.keras.optimizers.Adam(LEARNING_RATE)
-model = NerModel(hidden_num = HIIDEN_NUMS, vocab_size =len(voc2id), label_size = len(tag2id), embedding_size = EMBEDDING_SIZE)
+model = NerModel(
+    hidden_num=HIIDEN_NUMS,
+    vocab_size=len(voc2id),
+    label_size=len(tag2id),
+    embedding_size=EMBEDDING_SIZE,
+)
 
 
 # restore model
-ckpt = tf.train.Checkpoint(optimizer=optimizer,model=model)
+ckpt = tf.train.Checkpoint(optimizer=optimizer, model=model)
 ckpt.restore(tf.train.latest_checkpoint(checkpoint_file_path))
 
 
 #%%
-# prediction
-text = "民眾：賈伯斯是七號。"
-dataset = tf.keras.preprocessing.sequence.pad_sequences([[voc2id.get(char,0) for char in text]], padding='post')
-print(dataset)
-logits, text_lens = model.predict(dataset)
-paths = []
+# predict single sentence
+def predict_sentence(sentence):
+    # dataset = encode sentence
+    #         = [[1445   33 1878  826 1949 1510  112]]
+    dataset = tf.keras.preprocessing.sequence.pad_sequences(
+        [[voc2id.get(char, 0) for char in sentence]], padding="post"
+    )
 
-for logit, text_len in zip(logits, text_lens):
-    viterbi_path, _ = tf_ad.text.viterbi_decode(logit[:text_len], model.transition_params)
-    paths.append(viterbi_path)
-print(paths[0])
-print([id2tag[id] for id in paths[0]])
-entities_result = format_result(list(text), [id2tag[id] for id in paths[0]])
-print(entities_result)
+    # logits = (1, 7, 28) = (sentence, words, predict_distrib)
+    # text_lens = [7]
+    logits, text_lens = model.predict(dataset)
+
+    paths = []
+
+    for logit, text_len in zip(logits, text_lens):
+        viterbi_path, _ = tf_ad.text.viterbi_decode(
+            logit[:text_len], model.transition_params
+        )
+        paths.append(viterbi_path)
+
+    # path[0] = tag in sentence
+    #         = [18, 19, 19, 1, 26, 27, 1]
+
+    # result  = ['B-name', 'I-name', 'I-name', 'O', 'B-time', 'I-time', 'O']
+    result = [id2tag[id] for id in paths[0]]
+
+    # entities_result =
+    # [{'begin': 0, 'end': 3, 'words': '賈伯斯', 'type': 'name'},
+    #  {'begin': 4, 'end': 6, 'words': '七號', 'type': 'time'}]
+    entities_result = format_result(list(sentence), result)
+    return entities_result
+
+
+test_path = "../../dataset/crf_data/test_grained.data"
+test_raw_path = "../../dataset/test.txt"
+test_mapping = [len(article) for article in loadTestFile(test_raw_path)]
+
+# predict testset
+def predict(test_mapping, test_data_path):
+    """
+    test_mapping:
+        test.txt 每一篇的長度
+
+    test_data_path:
+        test_grained.data 的路徑
+    """
+    testsets = []
+    content = []
+    with open(test_data_path, "r", encoding="utf-8") as fr:
+        for line in fr.readlines():
+            if line != "\n":
+                w = line.strip("\n")
+                content.append(w)
+            else:
+                if content:
+                    testsets.append("".join(content))
+                content = []
+
+    article_id = 0
+    counter = 0
+    results = []
+    result = []
+    for testset in tqdm(testsets):
+        prediction = predict_sentence(testset)
+
+        # predict_pos + counter
+        if prediction:
+            for pred in prediction:
+                pred["begin"] += counter
+                pred["end"] += counter
+                result.append(pred)
+
+        counter += len(testset)
+
+        if counter == test_mapping[article_id]:
+            results.append(result)
+            article_id += 1
+            counter = 0
+            result = []
+
+    return results
+
+
+results = predict(test_mapping, test_path)
+
+#%%   
+
+output_path = "../../output/output.tsv"
+
+def output_result_tsv(results):
+    """
+    將 results 輸出成 tsv
+
+    results list (article, results, result-tuple):
+        [
+            [
+                {'begin': 170, 'end': 174, 'words': '1100', 'type': 'med_exam'},
+                {'begin': 245, 'end': 249, 'words': '1145', 'type': 'med_exam'},
+                ...
+            ]
+            ,
+            [
+                {'begin': 11, 'end': 13, 'words': '一天', 'type': 'time'},
+                {'begin': 263, 'end': 267, 'words': '今天早上', 'type': 'time'},
+                ...
+            ]
+        ]
+
+    """
+    titles = {"end": "end_position", "begin": "start_position", "words": "entity_text", "type": "entity_type"}
+    df = pd.DataFrame()
     
+    for i, result in enumerate(results):
+        results = pd.DataFrame(result).rename(columns=titles)
+        results = results[['start_position', 'end_position', 'entity_text', 'entity_type']]
+        
+        article_ids = pd.Series([i]*len(result), name="article_id")
+        df = df.append(pd.concat([article_ids, results], axis=1),  ignore_index=True)
+
+    df.to_csv(output_path, sep="\t", index=False)
+    
+output_result_tsv(results)
 # %%

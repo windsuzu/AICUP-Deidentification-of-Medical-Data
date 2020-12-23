@@ -2,5 +2,5 @@
 .virtual_documents/
 __pycache__/
 checkpoints/
-
+output/
 pretrained/cna.cbow.cwe_p.tar_g.512d.0.txt
