@@ -1,5 +1,10 @@
 #%%
 import tensorflow as tf
+
+# physical_devices = tf.config.list_physical_devices('GPU')
+# tf.config.experimental.set_memory_growth(physical_devices[0], enable=True)
+# print(physical_devices)
+#%%
 import tensorflow_addons as tf_ad
 import os
 
@@ -28,16 +33,14 @@ def build_vocab(corpus_file_list, vocab_file, tag_file):
         # words = words.union(set([line.strip().split()[0]  for line in open(file, "r", encoding='utf-8').readlines()]))
         # tags = tags.union(set([line.strip().split()[-1] for line in open(file, "r", encoding='utf-8').readlines()]))
         for line in open(file, "r", encoding="utf-8").readlines():
-            line = line.strip()
-            if line == "end":
+            if line == "\n":
                 continue
             try:
-                w, t = line.split()
+                w, t = line.split(" ")
                 words.add(w)
-                tags.add(t)
+                tags.add(t.strip("\n"))
             except Exception as e:
-                print(line.split())
-                # raise e
+                raise e
 
     if not os.path.exists(vocab_file):
         with open(vocab_file, "w", encoding="utf-8") as f:
@@ -96,7 +99,7 @@ def read_vocab(vocab_file):
     return vocab2id, id2vocab
 
 
-def tokenize(filename, vocab2id, tag2id):
+def tokenize(filename, vocab2id, tag2id, maxlen):
     """
     給定 train.data 輸出 tokenize 過的文字列表
 
@@ -147,8 +150,8 @@ def tokenize(filename, vocab2id, tag2id):
             except Exception as e:
                 content = []
                 label = []
-    contents = tf.keras.preprocessing.sequence.pad_sequences(contents, padding="post")
-    labels = tf.keras.preprocessing.sequence.pad_sequences(labels, padding="post")
+    contents = tf.keras.preprocessing.sequence.pad_sequences(contents, padding="post", maxlen=maxlen)
+    labels = tf.keras.preprocessing.sequence.pad_sequences(labels, padding="post", maxlen=maxlen)
     return contents, labels
 
 
@@ -263,27 +266,34 @@ class NerModel(tf.keras.Model):
 vocab_file_path = "../../dataset/crf_bilstm/vocab_file.txt"
 tag_file_path = "../../dataset/crf_bilstm/tag.txt"
 
-train_path = "../../dataset/crf_data/train.data"
+train_path = "../../dataset/crf_data/train_grained.data"
 
 if not (os.path.exists(vocab_file_path) and os.path.exists(tag_file_path)):
     build_vocab([train_path], vocab_file_path, tag_file_path)
+
+BATCH_SIZE = 128
+HIIDEN_NUMS = 512
+EMBEDDING_SIZE = 300
+LEARNING_RATE = 1e-3
+EPOCHS = 10
+SENTENCE_MAX_LEN = 32
+checkpoint_file_path = "../checkpoints/crf_bilstm/"
+
+
 # %%
 voc2id, id2voc = read_vocab(vocab_file_path)
 tag2id, id2tag = read_vocab(tag_file_path)
 
-text_sequences, label_sequences = tokenize(train_path, voc2id, tag2id)
+text_sequences, label_sequences = tokenize(train_path, voc2id, tag2id, SENTENCE_MAX_LEN)
 
-BATCH_SIZE = 2
+
+#%%
 train_dataset = tf.data.Dataset.from_tensor_slices((text_sequences, label_sequences))
 train_dataset = train_dataset.shuffle(len(text_sequences)).batch(
     BATCH_SIZE, drop_remainder=True
 )
 
-HIIDEN_NUMS = 512
-EMBEDDING_SIZE = 300
-LEARNING_RATE = 1e-3
-EPOCHS = 10
-checkpoint_file_path = "../checkpoints/crf_bilstm/"
+
 
 model = NerModel(
     hidden_num=HIIDEN_NUMS,
@@ -351,10 +361,41 @@ for epoch in range(EPOCHS):
         step = step + 1
         loss, logits, text_lens = train_one_step(text_batch, labels_batch)
         if step % 20 == 0:
+            print('epoch %d, step %d, loss %.4f , accuracy %.4f' % (epoch, step, loss, accuracy))
             accuracy = get_acc_one_step(logits, text_lens, labels_batch)
 
             if accuracy > best_acc:
                 best_acc = accuracy
                 ckpt_manager.save()
 
+# %%
+test_path = "../../dataset/crf_data/test_grained.data"
+
+# text_sequences ,label_sequences= tokenize(test_path, voc2id, tag2id)
+
+optimizer = tf.keras.optimizers.Adam(LEARNING_RATE)
+model = NerModel(hidden_num = HIIDEN_NUMS, vocab_size =len(voc2id), label_size = len(tag2id), embedding_size = EMBEDDING_SIZE)
+
+
+# restore model
+ckpt = tf.train.Checkpoint(optimizer=optimizer,model=model)
+ckpt.restore(tf.train.latest_checkpoint(checkpoint_file_path))
+
+
+#%%
+# prediction
+text = "民眾：賈伯斯是七號。"
+dataset = tf.keras.preprocessing.sequence.pad_sequences([[voc2id.get(char,0) for char in text]], padding='post')
+print(dataset)
+logits, text_lens = model.predict(dataset)
+paths = []
+
+for logit, text_len in zip(logits, text_lens):
+    viterbi_path, _ = tf_ad.text.viterbi_decode(logit[:text_len], model.transition_params)
+    paths.append(viterbi_path)
+print(paths[0])
+print([id2tag[id] for id in paths[0]])
+entities_result = format_result(list(text), [id2tag[id] for id in paths[0]])
+print(entities_result)
+    
 # %%
