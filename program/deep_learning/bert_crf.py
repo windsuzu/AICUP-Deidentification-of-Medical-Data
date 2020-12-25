@@ -214,7 +214,7 @@ optimizer = tf.keras.optimizers.Adam(learning_rate=5e-5)
 model.compile(optimizer=optimizer)
 
 checkpoint = tf.keras.callbacks.ModelCheckpoint(
-    "../checkpoints/crf_transformers/",
+    "../checkpoints/bert_crf/",
     save_best_only=True,
     save_weights_only=True,
     moniter="val_f1",

@@ -236,9 +236,6 @@ def format_result(chars, tags):
 class NerModel(tf.keras.Model):
     def __init__(self, hidden_num, vocab_size, label_size, embedding_size):
         super(NerModel, self).__init__()
-        self.num_hidden = hidden_num
-        self.vocab_size = vocab_size
-        self.label_size = label_size
 
         self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_size)
         self.biLSTM = tf.keras.layers.Bidirectional(
@@ -253,13 +250,17 @@ class NerModel(tf.keras.Model):
 
     @tf.function
     def call(self, text, labels=None, training=None):
+        
         text_lens = tf.math.reduce_sum(
             tf.cast(tf.math.not_equal(text, 0), dtype=tf.int32), axis=-1
         )
         # -1 change 0
         inputs = self.embedding(text)
+        print('inputs: ', inputs)
         inputs = self.dropout(inputs, training)
+        print('inputs: ', inputs)
         logits = self.dense(self.biLSTM(inputs))
+        print('logits: ', logits)
 
         if labels is not None:
             label_sequences = tf.convert_to_tensor(labels, dtype=tf.int32)
@@ -289,7 +290,7 @@ EMBEDDING_SIZE = 512
 LEARNING_RATE = 1e-3
 EPOCHS = 20
 SENTENCE_MAX_LEN = 32
-checkpoint_file_path = "../checkpoints/crf_bilstm/"
+checkpoint_file_path = "../checkpoints/bilstm_crf/"
 
 
 # %%
@@ -298,14 +299,13 @@ tag2id, id2tag = read_vocab(tag_file_path)
 
 text_sequences, label_sequences = tokenize(train_path, voc2id, tag2id, SENTENCE_MAX_LEN)
 
-
-#%%
 train_dataset = tf.data.Dataset.from_tensor_slices((text_sequences, label_sequences))
 train_dataset = train_dataset.shuffle(len(text_sequences)).batch(
     BATCH_SIZE, drop_remainder=True
 )
 
 
+#%%
 model = NerModel(
     hidden_num=HIIDEN_NUMS,
     vocab_size=len(voc2id),
@@ -483,9 +483,10 @@ def predict(test_mapping, test_data_path):
 
 results = predict(test_mapping, test_path)
 
-#%%   
+#%%
 
 output_path = "../../output/output.tsv"
+
 
 def output_result_tsv(results):
     """
@@ -507,17 +508,25 @@ def output_result_tsv(results):
         ]
 
     """
-    titles = {"end": "end_position", "begin": "start_position", "words": "entity_text", "type": "entity_type"}
+    titles = {
+        "end": "end_position",
+        "begin": "start_position",
+        "words": "entity_text",
+        "type": "entity_type",
+    }
     df = pd.DataFrame()
-    
+
     for i, result in enumerate(results):
         results = pd.DataFrame(result).rename(columns=titles)
-        results = results[['start_position', 'end_position', 'entity_text', 'entity_type']]
-        
-        article_ids = pd.Series([i]*len(result), name="article_id")
-        df = df.append(pd.concat([article_ids, results], axis=1),  ignore_index=True)
+        results = results[
+            ["start_position", "end_position", "entity_text", "entity_type"]
+        ]
+
+        article_ids = pd.Series([i] * len(result), name="article_id")
+        df = df.append(pd.concat([article_ids, results], axis=1), ignore_index=True)
 
     df.to_csv(output_path, sep="\t", index=False)
-    
+
+
 output_result_tsv(results)
 # %%
