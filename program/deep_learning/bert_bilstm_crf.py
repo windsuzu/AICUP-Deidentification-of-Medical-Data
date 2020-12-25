@@ -146,14 +146,34 @@ bert_model_name = [
     "chinese-roberta-wwm-ext-large",
 ]
 
-tokenizer = BertTokenizer.from_pretrained(bert_model_name[0])
-bert_model = TFBertModel.from_pretrained(bert_model_name[0], from_pt=True)
+tokenizer = BertTokenizer.from_pretrained(bert_model_name[3])
+bert_model = TFBertModel.from_pretrained(bert_model_name[3], from_pt=True)
+
 
 #%%
-train_texts, train_tags = getTrainData("dataset/crf_data/train_grained.data")
+def remove_imbalance_trainsets(train_texts, train_tags, percent):
+    o_sets = []
+    trainsets = []
+    for text, tag in zip(train_texts, train_tags):
+        if all([token == "O" for token in tag]):
+            if len(text) > 7:
+                o_sets.append((text, tag))
+        else:
+            trainsets.append((text, tag))
+    import random
+    random.shuffle(o_sets)
+    o_sets = o_sets[:int(len(o_sets) * percent)]
+    trainsets.extend(o_sets)
+    random.shuffle(trainsets)
+    return zip(*trainsets)
+
+
+train_texts, train_tags = getTrainData("/gdrive/My Drive/AICUP2020/dataset/crf_data/train_grained.data")
+# train_texts, train_tags = remove_imbalance_trainsets(train_texts, train_tags)
 unique_tags = set(tag for tags in train_tags for tag in tags)
 tag2id = {tag: id for id, tag in enumerate(unique_tags)}
 id2tag = {id: tag for tag, id in tag2id.items()}
+
 
 #%%
 train_encodings = tokenizer(
@@ -199,7 +219,6 @@ class NerModel(tf.keras.Model):
             tf.cast(tf.math.not_equal(text["input_ids"], 0), dtype=tf.int32), axis=-1
         )
         # -1 change 0
-
         # 64, 32, 768
         embedding_layer = self.embedding(
             text["input_ids"], attention_mask=text["attention_mask"]
@@ -228,7 +247,7 @@ model = NerModel(
     label_size=len(tag2id),
 )
 
-# freeze BERT embedding parameters 
+# freeze BERT embedding parameters
 model.layers[0].trainable = False
 
 optimizer = tf.keras.optimizers.Adam(LEARNING_RATE)
@@ -288,7 +307,7 @@ for epoch in range(EPOCHS):
     for _, (text_batch, labels_batch) in enumerate(train_dataset):
         step += 1
         loss, logits, text_lens = train_one_step(text_batch, labels_batch)
-        
+
         if step % 20 == 0:
             accuracy = get_acc_one_step(logits, text_lens, labels_batch)
             print(
@@ -300,4 +319,147 @@ for epoch in range(EPOCHS):
                 ckpt_manager.save()
                 print("model saved")
 
+
 #%%
+# restore model
+ckpt = tf.train.Checkpoint(optimizer=optimizer, model=model)
+ckpt.restore(tf.train.latest_checkpoint(checkpoint_file_path))
+
+# predict single sentence
+def predict_sentence(sentence):
+    # dataset = encode sentence
+    #         = [[1445   33 1878  826 1949 1510  112]]
+    dataset = tokenizer(sentence, add_special_tokens=False, return_token_type_ids=False, is_split_into_words=True, padding=True)
+    dataset = tf.data.Dataset.from_tensors(dict(dataset)).batch(1)
+
+    # logits = (1, 7, 28) = (sentence, words, predict_distrib)
+    # text_lens = [7]
+    logits, text_lens = model.predict(dataset)
+    paths = []
+    logits = logits.squeeze()[np.newaxis, :]
+    text_lens = [sum(text_lens)]
+
+    for logit, text_len in zip(logits, text_lens):
+        viterbi_path, _ = tf_ad.text.viterbi_decode(
+            logit[:text_len], model.transition_params
+        )
+
+        paths.append(viterbi_path)
+
+    # paths[0] = tag in sentence
+    #          = [18, 19, 19, 1, 26, 27, 1]
+
+    # result  = ['B-name', 'I-name', 'I-name', 'O', 'B-time', 'I-time', 'O']
+    result = [id2tag[id] for id in paths[0]]
+    # entities_result =
+    # [{'begin': 0, 'end': 3, 'words': '賈伯斯', 'type': 'name'},
+    #  {'begin': 4, 'end': 6, 'words': '七號', 'type': 'time'}]
+    entities_result = format_result(list(sentence), result)
+    return entities_result
+
+
+# predict_sentence("醫生：賈伯斯是七號。")
+# predict_sentence("民眾：阿只是前天好很多。前天就算沒盜，可是一覺到天明這樣。")
+# predict_sentence("民眾：嗯。")
+
+
+#%%
+test_path = "../../dataset/crf_data/test_grained.data"
+test_raw_path = "../../dataset/test.txt"
+test_mapping = [len(article) for article in loadTestFile(test_raw_path)]
+
+# predict testset
+def predict(test_mapping, test_data_path):
+    """
+    test_mapping:
+        test.txt 每一篇的長度
+
+    test_data_path:
+        test_grained.data 的路徑
+    """
+    testsets = []
+    content = []
+    with open(test_data_path, "r", encoding="utf-8") as fr:
+        for line in fr.readlines():
+            if line != "\n":
+                w = line.strip("\n")
+                content.append(w)
+            else:
+                if content:
+                    testsets.append("".join(content))
+                content = []
+
+    article_id = 0
+    counter = 0
+    results = []
+    result = []
+    for testset in tqdm(testsets):
+        prediction = predict_sentence(testset)
+
+        # predict_pos + counter
+        if prediction:
+            for pred in prediction:
+                pred["begin"] += counter
+                pred["end"] += counter
+                result.append(pred)
+
+        counter += len(testset)
+
+        if counter == test_mapping[article_id]:
+            results.append(result)
+            article_id += 1
+            counter = 0
+            result = []
+
+    return results
+
+
+results = predict(test_mapping, test_path)
+
+
+#%%
+output_path = "../../output/output.tsv"
+
+
+def output_result_tsv(results):
+    """
+    將 results 輸出成 tsv
+
+    results list (article, results, result-tuple):
+        [
+            [
+                {'begin': 170, 'end': 174, 'words': '1100', 'type': 'med_exam'},
+                {'begin': 245, 'end': 249, 'words': '1145', 'type': 'med_exam'},
+                ...
+            ]
+            ,
+            [
+                {'begin': 11, 'end': 13, 'words': '一天', 'type': 'time'},
+                {'begin': 263, 'end': 267, 'words': '今天早上', 'type': 'time'},
+                ...
+            ]
+        ]
+
+    """
+    titles = {
+        "end": "end_position",
+        "begin": "start_position",
+        "words": "entity_text",
+        "type": "entity_type",
+    }
+    df = pd.DataFrame()
+
+    for i, result in enumerate(results):
+        if not result:
+            continue
+        results = pd.DataFrame(result).rename(columns=titles)
+        results = results[
+            ["start_position", "end_position", "entity_text", "entity_type"]
+        ]
+        article_ids = pd.Series([i] * len(result), name="article_id")
+        df = df.append(pd.concat([article_ids, results], axis=1), ignore_index=True)
+
+    df.to_csv(output_path, sep="\t", index=False)
+
+
+output_result_tsv(results)

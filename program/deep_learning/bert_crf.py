@@ -234,7 +234,7 @@ history = model.fit(
 )
 
 # %%
-tf.keras.models.save_model(model, "../checkpoints/crf_transformers/1")
+tf.keras.models.save_model(model, "../checkpoints/crf_transformers/")
 plt.plot(history.history["val_f1"])
 plt.title("Model f1")
 plt.ylabel("f1")

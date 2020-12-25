@@ -256,11 +256,8 @@ class NerModel(tf.keras.Model):
         )
         # -1 change 0
         inputs = self.embedding(text)
-        print('inputs: ', inputs)
         inputs = self.dropout(inputs, training)
-        print('inputs: ', inputs)
         logits = self.dense(self.biLSTM(inputs))
-        print('logits: ', logits)
 
         if labels is not None:
             label_sequences = tf.convert_to_tensor(labels, dtype=tf.int32)
@@ -382,6 +379,7 @@ for epoch in range(EPOCHS):
                 ckpt_manager.save()
                 print("model saved")
 
+
 # %%
 optimizer = tf.keras.optimizers.Adam(LEARNING_RATE)
 model = NerModel(
@@ -409,7 +407,8 @@ def predict_sentence(sentence):
     # logits = (1, 7, 28) = (sentence, words, predict_distrib)
     # text_lens = [7]
     logits, text_lens = model.predict(dataset)
-
+    print(logits.shape)
+    print(text_lens)
     paths = []
 
     for logit, text_len in zip(logits, text_lens):
@@ -430,7 +429,9 @@ def predict_sentence(sentence):
     entities_result = format_result(list(sentence), result)
     return entities_result
 
+predict_sentence("賈伯斯是七號。")
 
+#%%
 test_path = "../../dataset/crf_data/test_grained.data"
 test_raw_path = "../../dataset/test.txt"
 test_mapping = [len(article) for article in loadTestFile(test_raw_path)]
