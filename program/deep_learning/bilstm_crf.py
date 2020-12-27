@@ -273,10 +273,13 @@ class NerModel(tf.keras.Model):
 
 
 # %%
-vocab_file_path = "../../dataset/crf_bilstm/vocab_file.txt"
-tag_file_path = "../../dataset/crf_bilstm/tag.txt"
+vocab_file_path = "../../dataset/bilstm_crf/vocab_file.txt"
+tag_file_path = "../../dataset/bilstm_crf/tag.txt"
 
-train_path = "../../dataset/crf_data/train_grained.data"
+train_path = "../../dataset/ner_data/train_grained.data"
+
+if not Path(vocab_file_path).parent.exists():
+    Path(vocab_file_path).parent.mkdir()
 
 if not (os.path.exists(vocab_file_path) and os.path.exists(tag_file_path)):
     build_vocab([train_path], vocab_file_path, tag_file_path)
@@ -300,6 +303,7 @@ train_dataset = tf.data.Dataset.from_tensor_slices((text_sequences, label_sequen
 train_dataset = train_dataset.shuffle(len(text_sequences)).batch(
     BATCH_SIZE, drop_remainder=True
 )
+
 
 
 #%%
@@ -431,10 +435,6 @@ def predict_sentence(sentence):
 
 predict_sentence("賈伯斯是七號。")
 
-#%%
-test_path = "../../dataset/crf_data/test_grained.data"
-test_raw_path = "../../dataset/test.txt"
-test_mapping = [len(article) for article in loadTestFile(test_raw_path)]
 
 # predict testset
 def predict(test_mapping, test_data_path):

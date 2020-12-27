@@ -3,9 +3,6 @@ import sys
 from pathlib import Path
 from tqdm import tqdm
 
-sys.path.append(str(Path().resolve().parents[1]))
-
-from program.utils.load_data import loadTestFile
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -23,42 +20,7 @@ EPOCHS = 15
 checkpoint_file_path = "../checkpoints/bert_bilstm_crf/"
 
 
-def getTrainData(datapath):
 
-    """
-    Load crf's train.data to get the train data in the format of the transformers.
-
-    Returns:
-        train_texts (dataset_size, content_size):
-            [...[...'：', '阿', '只', '是', '前', '天', '好', '很', '多'...]...]
-
-        train_tags (dataset_size, content_size):
-            [...[...'O', 'O', 'O', 'O', 'B-time', 'I-time', 'O', 'O', 'O'...]...]
-    """
-    train_texts = []
-    train_tags = []
-    path = Path().resolve().parents[1] / datapath
-    with path.open(encoding="UTF8") as f:
-        train_data = f.readlines()
-        texts = []
-        tags = []
-
-        # content of each line: "中 B-name\n"
-        # line[0] = 中
-        # line[2:-1] = B-name
-        for line in train_data:
-            if line == "\n":
-                train_texts.append(texts)
-                train_tags.append(tags)
-                texts = []
-                tags = []
-                continue
-
-            text, tag = line[0], line[2:-1]
-            texts.append(text)
-            tags.append(tag)
-
-    return train_texts, train_tags
 
 
 def encode_tags(tags):
@@ -151,25 +113,9 @@ bert_model = TFBertModel.from_pretrained(bert_model_name[3], from_pt=True)
 
 
 #%%
-def remove_imbalance_trainsets(train_texts, train_tags, percent):
-    o_sets = []
-    trainsets = []
-    for text, tag in zip(train_texts, train_tags):
-        if all([token == "O" for token in tag]):
-            if len(text) > 7:
-                o_sets.append((text, tag))
-        else:
-            trainsets.append((text, tag))
-    import random
-    random.shuffle(o_sets)
-    o_sets = o_sets[:int(len(o_sets) * percent)]
-    trainsets.extend(o_sets)
-    random.shuffle(trainsets)
-    return zip(*trainsets)
 
 
-train_texts, train_tags = getTrainData("/gdrive/My Drive/AICUP2020/dataset/crf_data/train_grained.data")
-# train_texts, train_tags = remove_imbalance_trainsets(train_texts, train_tags)
+
 unique_tags = set(tag for tags in train_tags for tag in tags)
 tag2id = {tag: id for id, tag in enumerate(unique_tags)}
 id2tag = {id: tag for tag, id in tag2id.items()}
@@ -363,10 +309,6 @@ def predict_sentence(sentence):
 # predict_sentence("民眾：嗯。")
 
 
-#%%
-test_path = "../../dataset/crf_data/test_grained.data"
-test_raw_path = "../../dataset/test.txt"
-test_mapping = [len(article) for article in loadTestFile(test_raw_path)]
 
 # predict testset
 def predict(test_mapping, test_data_path):

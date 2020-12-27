@@ -12,78 +12,7 @@ MAX_SENTENCE_LENGTH = 128
 BERT_TOKENS_COUNT = 2
 
 
-def getTrainData(root_datapath):
 
-    """
-    Load crf's train.data to get the train data in the format of the transformers.
-
-    Returns:
-        train_texts (dataset_size, content_size):
-            [...[...'：', '阿', '只', '是', '前', '天', '好', '很', '多'...]...]
-
-        train_tags (dataset_size, content_size):
-            [...[...'O', 'O', 'O', 'O', 'B-time', 'I-time', 'O', 'O', 'O'...]...]
-    """
-    train_texts = []
-    train_tags = []
-    path = Path().resolve().parents[1] / root_datapath
-    with path.open(encoding="UTF8") as f:
-        train_data = f.readlines()
-        texts = []
-        tags = []
-
-        # content of each line: "中 B-name\n"
-        # line[0] = 中
-        # line[2:-1] = B-name
-        for line in train_data:
-            if line == "\n" or len(texts) == MAX_SENTENCE_LENGTH:
-                train_texts.append(texts)
-                train_tags.append(tags)
-                texts = []
-                tags = []
-
-            if line == "\n":
-                continue
-
-            text, tag = line[0], line[2:-1]
-            texts.append(text)
-            tags.append(tag)
-
-    return train_texts, train_tags
-
-
-def getTestData(root_datapath):
-    """Load crf's test.data to get the test data in the format of the transformers.
-
-    Returns:
-        test_texts (dataset_size, content_size):
-            [...[...'有', '辦', '法', '，', '這', '是', '嚴', '重', '或', '一', ...]...]
-
-        test_mapping: test texts without split.
-    """
-    test_texts = []
-    test_mapping = []
-    path = Path().resolve().parents[1] / root_datapath
-    with path.open(encoding="UTF8") as f:
-        test_data = f.readlines()
-        texts = []
-        mappings = []
-
-        for line in test_data:
-            if line == "\n" or len(texts) == MAX_SENTENCE_LENGTH:
-                test_texts.append(texts)
-                mappings.extend(texts)
-                texts = []
-
-            if line == "\n":
-                test_mapping.append(mappings)
-                mappings = []
-                continue
-
-            text = line[0]
-            texts.append(text)
-
-    return test_texts, test_mapping
 
 
 def encode_tags(tags):
@@ -101,10 +30,6 @@ def encode_tags(tags):
         maxlen=MAX_SENTENCE_LENGTH + BERT_TOKENS_COUNT,
     )
 
-
-# %%
-train_texts, train_tags = getTrainData("dataset/crf_data/train.data")
-test_texts, test_mapping = getTestData("dataset/crf_data/test.data")
 
 unique_tags = set(tag for tags in train_tags for tag in tags)
 tag2id = {tag: id for id, tag in enumerate(unique_tags)}
@@ -201,12 +126,6 @@ output = crf(output)
 
 model = tf.keras.models.Model(inputs=[input_ids, attention_mask], outputs=output)
 model = ModelWithCRFLoss(model)
-# model.summary()
-
-
-#%%
-yp = None
-yt = None
 
 
 ##%%
