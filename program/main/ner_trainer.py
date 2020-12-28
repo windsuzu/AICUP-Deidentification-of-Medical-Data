@@ -83,7 +83,9 @@ def main(_):
         Path(FLAGS.MODEL_CHECKPOINT_PATH).mkdir(parents=True)
 
     trainer_list = {
-        "CRF": None,
+        "CRF": buildCrfTrainer(),
+        "SVM": buildSvmTrainer(),
+        "PYTORCH_CRF": buildPytorchCrfTrainer(),
         "BILSTM_CRF": buildBiLstmCrfTrainer(),
         "BERT_CRF": buildBertCrfTrainer(),
         "BERT_BILSTM_CRF": buildBertBilstmCrfTrainer(),
