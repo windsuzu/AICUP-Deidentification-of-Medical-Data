@@ -138,3 +138,13 @@ class GeneralDataPreprocessor(DataPreprocessor):
             pickle.dump(mapping, f)
 
         print("Test text data and mapping array saved")
+        
+    @staticmethod
+    def loadTrainArrays(train_X_path, train_y_path):
+        with open(train_X_path, "rb") as f:
+            train_X = pickle.load(f)
+
+        with open(train_y_path, "rb") as f:
+            train_y = pickle.load(f)
+
+        return train_X, train_y

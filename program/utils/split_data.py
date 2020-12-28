@@ -1,4 +1,3 @@
-from program.abstracts.abstract_data_generator import DataGenerator
 import re
 
 
@@ -111,12 +110,3 @@ def generateCRFGrainedData(data_path, output_data_path, for_predict=False):
                     )
                 f.write(grained + "\n\n")
 
-
-class SplitDataGenerator(DataGenerator):
-    def outputTrainData(self, raw_train, output_train):
-        generateCRFGrainedData(raw_train, output_train)
-        print("Split train data generated.")
-
-    def outputTestData(self, raw_test, output_test):
-        generateCRFGrainedData(raw_test, output_test, True)
-        print("Split test data generated.")

@@ -1,8 +1,8 @@
 from absl import app, flags
 from pathlib import Path
 
-from program.utils.load_data import DefaultDataGenerator
-from program.utils.split_data import SplitDataGenerator
+from program.utils.default_data_generator import DefaultDataGenerator
+from program.utils.split_data_generator import SplitDataGenerator
 
 
 FLAGS = flags.FLAGS
