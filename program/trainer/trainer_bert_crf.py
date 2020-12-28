@@ -1,8 +1,9 @@
-from program.deep_learning.model_bert_crf import BertCrfModel
+import pickle
 import tensorflow as tf
 import matplotlib.pyplot as plt
-import program.deep_learning.custom_metrics as custom_metrics
-from program.deep_learning.data_preprocessor import GeneralDataPreprocessor
+from program.data_process.data_preprocessor import GeneralDataPreprocessor
+from program.models.model_bert_crf import BertCrfModel
+from program.utils.custom_metrics import Metrics
 from transformers import AutoTokenizer, TFAutoModelForTokenClassification
 from program.abstracts.abstract_ner_trainer import NerTrainer
 from dataclasses import dataclass
@@ -49,6 +50,9 @@ class BertCrfTrainer(NerTrainer):
         self.tag2id = {tag: id for id, tag in enumerate(self.unique_tags)}
         self.id2tag = {id: tag for tag, id in self.tag2id.items()}
 
+        with open(self.model_data_path + "id2tag.pkl", "wb") as f:
+            pickle.dump(self.id2tag, f)
+
         train_X, val_X, train_y, val_y = train_test_split(
             train_X, train_y, test_size=0.1
         )
@@ -85,7 +89,7 @@ class BertCrfTrainer(NerTrainer):
             epochs=self.epochs,
             batch_size=self.batch_size,
             validation_data=self.val_dataset.batch(self.batch_size),
-            callbacks=[custom_metrics.Metrics(self.val_dataset), checkpoint],
+            callbacks=[Metrics(self.val_dataset), checkpoint],
         )
 
     def visualize(self):

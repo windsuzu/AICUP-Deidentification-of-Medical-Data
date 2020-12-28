@@ -1,7 +1,7 @@
 from pathlib import Path
-from program.deep_learning.trainer_bert_bilstm_crf import BertBilstmCrfTrainer
-from program.deep_learning.trainer_bilstm_crf import BiLstmCrfTrainer
-from program.deep_learning.trainer_bert_crf import BertCrfTrainer
+from program.trainer.trainer_bert_bilstm_crf import BertBilstmCrfTrainer
+from program.trainer.trainer_bert_crf import BertCrfTrainer
+from program.trainer.trainer_bilstm_crf import BiLstmCrfTrainer
 from absl import app, flags
 import tensorflow as tf
 
@@ -10,7 +10,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("MODEL", "CRF", "model")
 flags.DEFINE_string("TRAIN_DATA_PATH", "dataset/ner_data/train.data", "train data path")
 flags.DEFINE_string("MODEL_DATA_PATH", "model/CRF/data/", "model train data path")
-flags.DEFINE_string("CHECKPOINT_PATH", "model/CRF/checkpoint/", "checkpoint path")
+flags.DEFINE_string("MODEL_CHECKPOINT_PATH", "model/CRF/checkpoint/", "checkpoint path")
 flags.DEFINE_integer("CHECKPOINT_KEEP", 3, "checkpoint max-to-keep")
 flags.DEFINE_integer("SENTENCE_MAX_LENGTH", 32, "sentence max length")
 flags.DEFINE_integer("BATCH_SIZE", 128, "batch size")
@@ -29,7 +29,7 @@ def buildBiLstmCrfTrainer():
         return BiLstmCrfTrainer(
             FLAGS.TRAIN_DATA_PATH,
             FLAGS.MODEL_DATA_PATH,
-            FLAGS.CHECKPOINT_PATH,
+            FLAGS.MODEL_CHECKPOINT_PATH,
             FLAGS.CHECKPOINT_KEEP,
             FLAGS.SENTENCE_MAX_LENGTH,
             FLAGS.BATCH_SIZE,
@@ -46,7 +46,7 @@ def buildBertCrfTrainer():
         return BertCrfTrainer(
             FLAGS.TRAIN_DATA_PATH,
             FLAGS.MODEL_DATA_PATH,
-            FLAGS.CHECKPOINT_PATH,
+            FLAGS.MODEL_CHECKPOINT_PATH,
             FLAGS.CHECKPOINT_KEEP,
             FLAGS.SENTENCE_MAX_LENGTH,
             FLAGS.BATCH_SIZE,
@@ -63,7 +63,7 @@ def buildBertBilstmCrfTrainer():
         return BertBilstmCrfTrainer(
             FLAGS.TRAIN_DATA_PATH,
             FLAGS.MODEL_DATA_PATH,
-            FLAGS.CHECKPOINT_PATH,
+            FLAGS.MODEL_CHECKPOINT_PATH,
             FLAGS.CHECKPOINT_KEEP,
             FLAGS.SENTENCE_MAX_LENGTH,
             FLAGS.BATCH_SIZE,
@@ -79,8 +79,8 @@ def main(_):
     if not Path(FLAGS.MODEL_DATA_PATH).exists():
         Path(FLAGS.MODEL_DATA_PATH).mkdir(parents=True)
 
-    if not Path(FLAGS.CHECKPOINT_PATH).exists():
-        Path(FLAGS.CHECKPOINT_PATH).mkdir(parents=True)
+    if not Path(FLAGS.MODEL_CHECKPOINT_PATH).exists():
+        Path(FLAGS.MODEL_CHECKPOINT_PATH).mkdir(parents=True)
 
     trainer_list = {
         "CRF": None,

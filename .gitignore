@@ -3,5 +3,6 @@
 __pycache__/
 checkpoint/
 output/
+data/
 pretrained/cna.cbow.cwe_p.tar_g.512d.0.txt
 *.pkl

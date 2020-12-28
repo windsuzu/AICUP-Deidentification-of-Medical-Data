@@ -1,7 +1,6 @@
-import tensorflow as tf
-
-from sklearn.metrics import f1_score, recall_score, precision_score
 import numpy as np
+import tensorflow as tf
+from sklearn.metrics import f1_score, recall_score, precision_score
 
 class Metrics(tf.keras.callbacks.Callback):
     def __init__(self, validation_data):

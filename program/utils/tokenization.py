@@ -127,8 +127,3 @@ def tokenize(train_X, train_y, vocab2id, tag2id, maxlen):
     )
     return train_X, train_y
 
-
-tag_check = {
-    "I": ["B", "I"],
-    "E": ["B", "I"],
-}

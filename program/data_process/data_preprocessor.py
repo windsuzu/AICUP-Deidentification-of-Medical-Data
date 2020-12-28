@@ -1,8 +1,7 @@
 from pathlib import Path
 import pickle
-from program.utils.load_data import loadTestFile
-
 import numpy as np
+from program.utils.load_data import loadTestFile
 from program.abstracts.abstract_data_preprocessor import DataPreprocessor
 
 
@@ -148,3 +147,13 @@ class GeneralDataPreprocessor(DataPreprocessor):
             train_y = pickle.load(f)
 
         return train_X, train_y
+    
+    @staticmethod
+    def loadTestArrays(test_X_path, test_mapping_path):
+        with open(test_X_path, "rb") as f:
+            test_X = pickle.load(f)
+
+        with open(test_mapping_path, "rb") as f:
+            test_mapping = pickle.load(f)
+
+        return test_X, test_mapping

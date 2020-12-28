@@ -1,8 +1,9 @@
+import pickle
+from program.models.model_bert_bilstm_crf import BertBilstmCrfModel
+from program.data_process.data_preprocessor import GeneralDataPreprocessor
 import tensorflow as tf
 import tensorflow_addons as tf_ad
 import matplotlib.pyplot as plt
-from program.deep_learning.model_bert_bilstm_crf import BertBilstmCrfModel
-from program.deep_learning.data_preprocessor import GeneralDataPreprocessor
 from transformers import BertTokenizer, TFBertModel
 from program.abstracts.abstract_ner_trainer import NerTrainer
 from dataclasses import dataclass
@@ -38,6 +39,9 @@ class BertBilstmCrfTrainer(NerTrainer):
         unique_tags = set(tag for tags in train_y for tag in tags)
         self.tag2id = {tag: id for id, tag in enumerate(unique_tags)}
         self.id2tag = {id: tag for tag, id in self.tag2id.items()}
+
+        with open(self.model_data_path + "id2tag.pkl", "wb") as f:
+            pickle.dump(self.id2tag, f)
 
         train_encodings = self.tokenizer(
             train_X,
@@ -75,7 +79,7 @@ class BertBilstmCrfTrainer(NerTrainer):
             checkpoint_name="model.ckpt",
             max_to_keep=self.checkpoint_keep,
         )
-        
+
         @tf.function
         def train_one_step(text_batch, labels_batch):
             with tf.GradientTape() as tape:
@@ -86,7 +90,6 @@ class BertBilstmCrfTrainer(NerTrainer):
             gradients = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(gradients, model.trainable_variables))
             return loss, logits, text_lens
-
 
         def get_acc_one_step(logits, text_lens, labels_batch):
             paths = []
@@ -110,11 +113,13 @@ class BertBilstmCrfTrainer(NerTrainer):
                         dtype=tf.int32,
                     ),
                 )
-                accuracy = accuracy + tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+                accuracy = accuracy + tf.reduce_mean(
+                    tf.cast(correct_prediction, tf.float32)
+                )
                 # print(tf.reduce_mean(tf.cast(correct_prediction, tf.float32)))
             accuracy = accuracy / len(paths)
             return accuracy
-        
+
         best_acc = 0
         step = 0
         self.loss_history = []
@@ -124,7 +129,7 @@ class BertBilstmCrfTrainer(NerTrainer):
                 step += 1
                 loss, logits, text_lens = train_one_step(text_batch, labels_batch)
                 self.loss_history.append(loss)
-                
+
                 if step % 20 == 0:
                     accuracy = get_acc_one_step(logits, text_lens, labels_batch)
                     print(
@@ -135,7 +140,7 @@ class BertBilstmCrfTrainer(NerTrainer):
                         best_acc = accuracy
                         ckpt_manager.save()
                         print("model saved")
-                        
+
     def visualize(self):
         plt.plot(self.loss_history)
         plt.title("Model Loss")

@@ -1,8 +1,7 @@
+from program.data_process.default_data_generator import DefaultDataGenerator
+from program.data_process.split_data_generator import SplitDataGenerator
 from absl import app, flags
 from pathlib import Path
-
-from program.utils.default_data_generator import DefaultDataGenerator
-from program.utils.split_data_generator import SplitDataGenerator
 
 
 FLAGS = flags.FLAGS

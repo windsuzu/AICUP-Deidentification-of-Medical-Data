@@ -1,6 +1,6 @@
 from pathlib import Path
-from program.deep_learning.model_bilstm_crf import BilstmCrfModel
-from program.deep_learning.data_preprocessor import GeneralDataPreprocessor
+from program.models.model_bilstm_crf import BilstmCrfModel
+from program.data_process.data_preprocessor import GeneralDataPreprocessor
 from program.utils.tokenization import build_vocab, read_vocab
 from program.utils.tokenization import tokenize as tk
 import tensorflow as tf

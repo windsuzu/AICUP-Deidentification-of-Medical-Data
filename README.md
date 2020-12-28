@@ -1,19 +1,3 @@
-- [x] Clear Baseline Program, can explain the details about all the steps, upload result
-- [ ] Add embedding mechanism
-  - [ ] Word2Vec
-  - [ ] GloVe
-  - [ ] FastText
-- [ ] Add machine learning methods
-  - [ ] HMM
-  - [ ] CRF
-  - [ ] SVM
-- [ ] Add deep learning methods
-  - [ ] basic RNN
-  - [ ] BERT
-- [ ] Visualization
-- [ ] Upload
-- [ ] Design Pattern
-
 # AICUP - Deidentification of medical data
 
 ## Dataset

@@ -1,6 +1,5 @@
 from pathlib import Path
-from program.abstracts.abstract_data_preprocessor import DataPreprocessor
-from program.deep_learning.data_preprocessor import GeneralDataPreprocessor
+from program.data_process.data_preprocessor import GeneralDataPreprocessor
 from absl import app, flags
 
 FLAGS = flags.FLAGS
@@ -31,7 +30,7 @@ def main(_):
 
     dataPreprocessor.outputTestArray(
         FLAGS.MODEL_DATA_PATH + "test_X.pkl",
-        FLAGS.MODEL_DATA_PATH + "test_map.pkl",
+        FLAGS.MODEL_DATA_PATH + "test_mapping.pkl",
         FLAGS.RAW_TEST_DATA_PATH
     )
 
