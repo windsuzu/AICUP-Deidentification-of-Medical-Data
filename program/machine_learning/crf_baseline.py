@@ -82,20 +82,20 @@ def CRFFormatToList(data_path):
     return total_data_list
 
 
-def GetUntokenVector(word_vector_dim):
+def getUntokenVector(word_vector_dim):
     np.random.seed(42)
     unk_vector = np.random.rand(word_vector_dim)
     return unk_vector
 
 
-def ListToDict(vector):
+def listToDict(vector):
     vector_dict = dict()
     for idx_vec in range(len(vector)):
         vector_dict["dim_" + str(idx_vec + 1)] = vector[idx_vec]
     return vector_dict
 
 
-def Word2Vector(separate_data_list, embedded_dict, unk_vector):
+def word2Vector(separate_data_list, embedded_dict, unk_vector):
     separate_embedded_list = list()
     for idx_tuple in range(len(separate_data_list)):
         token = separate_data_list[idx_tuple][0]
@@ -104,21 +104,21 @@ def Word2Vector(separate_data_list, embedded_dict, unk_vector):
             vector = embedded_dict[token]
         else:
             vector = unk_vector
-        vector = ListToDict(vector)
+        vector = listToDict(vector)
         separate_embedded_list.append(vector)
 
     return separate_embedded_list
 
 
-def GetInputData(data_list, embedded_dict):
+def getInputData(data_list, embedded_dict):
     input_list = list()
 
     # No Match Word (unknown word) Vector in Embedding
     word_vector_dim = len(list(embedded_dict.values())[0])
-    unk_vector = GetUntokenVector(word_vector_dim)
+    unk_vector = getUntokenVector(word_vector_dim)
 
     for idx_list in range(len(data_list)):
-        separate_separate_list = Word2Vector(
+        separate_separate_list = word2Vector(
             data_list[idx_list], embedded_dict, unk_vector
         )
         input_list.append(separate_separate_list)
@@ -126,7 +126,7 @@ def GetInputData(data_list, embedded_dict):
     return input_list
 
 
-def GetLabelData(data_list):
+def getLabelData(data_list):
     total_label_list = list()
     for idx_list in range(len(data_list)):
         separate_label_list = list()
@@ -146,15 +146,15 @@ if validate:
     train_data_list, val_data_list = train_test_split(
         train_data_list, test_size=0.25, random_state=42
     )
-    x_val = GetInputData(val_data_list, word_vecs)
-    y_val = GetLabelData(val_data_list)
+    x_val = getInputData(val_data_list, word_vecs)
+    y_val = getLabelData(val_data_list)
 
 print("Processing training data")
-x_train = GetInputData(train_data_list, word_vecs)
-y_train = GetLabelData(train_data_list)
+x_train = getInputData(train_data_list, word_vecs)
+y_train = getLabelData(train_data_list)
 
 print("Processing testing data")
-x_test = GetInputData(test_data_list, word_vecs)
+x_test = getInputData(test_data_list, word_vecs)
 
 print("Training...")
 model.fit(x_train, y_train)
