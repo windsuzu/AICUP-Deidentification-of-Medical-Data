@@ -89,9 +89,12 @@ The competition provides information on clinical conversations and related inter
 
 ## Getting Started
 
-* 在 [Information and Baseline](#information-and-baseline) 查看競賽的基礎介紹與程式碼
-* 在 [Design Pattern](#design-pattern) 查看整個專案的架構介紹
+* [Dataset and Baseline](#dataset-and-baseline) 查看競賽的基礎介紹與程式碼
+* [Design Pattern](#design-pattern) 查看整個專案的架構介紹
+* [Motivation](docs/motivation.pdf) 查看專案動機簡報
+* [Report](docs/report.pdf) 查看專案成果簡報
 
+---
 
 ## Dataset and Baseline
 
@@ -103,10 +106,9 @@ The competition provides information on clinical conversations and related inter
 * [Baseline](program/machine_learning/crf_baseline.py)
 * [Exploratory Data Analysis](program/machine_learning/eda.py)
 
-## Design Pattern
+---
 
-* [Motivation](docs/motivation.pdf)
-* [Report](docs/report.pdf)
+## Design Pattern
 
 我們將不同 notebook 都切成四個部分: `data generator`, `data preprocessor`, `trainer`, `predictor`，並以這四個為基礎分別建立他們的 `abstract class`。最終在一個終端控制的 `main notebook` 使用 `absl.flags` 來操控所有的類別。
 
