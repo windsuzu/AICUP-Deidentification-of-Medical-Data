@@ -42,9 +42,11 @@
 
 * [About](#about)
 * [Getting Started](#getting-started)
-* [Information and Baseline](#information-and-baseline)
+* [Dataset and Baseline](#dataset-and-baseline)
+  * [Baseline Source Code](#baseline-source-code)
 * [Design Pattern](#design-pattern)
-* [Usage](#usage)
+  * [Abstract Classes](#abstract-classes)
+  * [Main](#main)
 * [Contributing](#contributing)
 * [License](#license)
 * [Contact](#contact)
@@ -61,9 +63,9 @@
 <tr>
 <td>
 
-這個專案來自 [AICUP 競賽 - 醫病資料去識別化](https://aidea-web.tw/topic/d84fabf5-9adf-4e1d-808e-91fbd4e03e6d)，該競賽提供了從成功大學醫院收集的臨床對話和相關訪談的文字內容。其中，文本的隱私內容和命名實體都是由人工標註的。 F1-Score 將被用來評估測試數據集上預測的正確性。 簡而言之，這個競賽就是中文的 NER (named-entity-recognition) 任務，我們必須在文字中識別出 18 種命名實體。 有趣的是，我們想要達成的事情並非提升任務的表現，而是藉由該任務學習應用 design pattern 於一個 AI 專案。
+這個專案來自 [AICUP 競賽 - 醫病資料去識別化](https://aidea-web.tw/topic/d84fabf5-9adf-4e1d-808e-91fbd4e03e6d)，該競賽提供了從成功大學醫院收集的臨床對話和相關訪談的文字內容。其中，文本的隱私內容和命名實體都是由人工標註的。 F1-Score 將被用來評估測試數據集上預測的正確性。 簡而言之，這個競賽就是中文的 NER (named-entity-recognition) 任務，我們必須在文字中識別出 18 種命名實體。 我們不只想要提升任務的表現，還想藉由該任務學習應用 design pattern 於一個 AI 專案。
 
-The competition provides information on clinical conversations and related interviews collected from the NCKU Hospital. The private contents and named entities of the text data are marked manually. The F1-Score will be used to evaluate the correctness of predictions on the test dataset. In short, this competition is the Chinese NER (named-entity-recognition) task, where we must identify 18 types of named entities in text. However, It is interesting that we want to achieve is not to improve the performance, but to use the task to learn to apply the design pattern to an AI project.
+The competition provides information on clinical conversations and related interviews collected from the NCKU Hospital. The private contents and named entities of the text data are marked manually. The F1-Score will be used to evaluate the correctness of predictions on the test dataset. In short, this competition is the Chinese NER (named-entity-recognition) task, where we must identify 18 types of named entities in text. We not only want to improve the performance of the task, but we also want to use the task to learn to apply the design pattern to an AI project.
 
 <details close>
 <summary>Built With</summary>
@@ -91,19 +93,44 @@ The competition provides information on clinical conversations and related inter
 * 在 [Design Pattern](#design-pattern) 查看整個專案的架構介紹
 
 
-## Information and Baseline
+## Dataset and Baseline
 
 * [Dataset Information](docs/dataset.md)
 * [Baseline Implementation](docs/baseline.md)
 
+### Baseline Source Code
+
+* [Baseline](program/machine_learning/crf_baseline.py)
+* [Exploratory Data Analysis](program/machine_learning/eda.py)
+
 ## Design Pattern
+
+* [Motivation](docs/motivation.pdf)
+* [Report](docs/report.pdf)
+
+我們將不同 notebook 都切成四個部分: `data generator`, `data preprocessor`, `trainer`, `predictor`，並以這四個為基礎分別建立他們的 `abstract class`。最終在一個終端控制的 `main notebook` 使用 `absl.flags` 來操控所有的類別。
+
+### Abstract Classes
+
+<details open><summary>Illustration</summary><img src="images/abstract.png" height=250></details>
+
+| data generator                                              | data preprocessor                                              | trainer                                                  | predictor                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| [source code](program/abstracts/abstract_data_generator.py) | [source code](program/abstracts/abstract_data_preprocessor.py) | [source code](program/abstracts/abstract_ner_trainer.py) | [source code](program/abstracts/abstract_ner_predictor.py) |
+
+### Main
+
+<details open><summary>Illustration</summary><img src="images/main.png" height=200></details>
+
+| main                                   | data generator                                | data preprocessor                                | trainer                                    | predictor                                    |
+| -------------------------------------- | --------------------------------------------- | ------------------------------------------------ | ------------------------------------------ | -------------------------------------------- |
+| [source code](program/main/main.ipynb) | [source code](program/main/data_generator.py) | [source code](program/main/data_preprocessor.py) | [source code](program/main/ner_trainer.py) | [source code](program/main/ner_predictor.py) |
+
 
 <!-- Main Notebook -->
 <!-- Abstract -->
 <!-- Entity -->
 <!-- Tasks -->
-
-## Usage
 
 ---
 
